@@ -690,41 +690,142 @@ function resetUI() {
 }
 
 // ============================================================
-// FULLSCREEN & FOCUS LOCK
 // ============================================================
-document.body.addEventListener('click', () => {
+// SCANNER — BUFFER INDEPENDEN (tidak butuh fokus di input)
+// ============================================================
+// Strategi: JANGAN andalkan input.focus() untuk menangkap scan.
+// Gunakan document.addEventListener('keydown') sebagai penangkap
+// universal — karakter scanner masuk ke sini TERLEPAS dari fokus browser.
+// Input field hanya dipakai sebagai display visual buffer saja.
+// ============================================================
+
+let scanBuffer = '';
+let scanTimer  = null;
+const SCAN_IDLE_MS = 80; // jeda max antar-karakter scanner (ms) — naikkan ke 120 jika scanner lambat
+
+// ── Blokir SEMUA keydown supaya tidak ada yang "kabur" ke address bar ──
+// Ini listener PERTAMA yang dipasang — sebelum browser sempat routing ke URL bar.
+document.addEventListener('keydown', function(e) {
+
+    // ── 1. Selalu blokir karakter printable agar tidak masuk address bar ──
+    //       (kecuali kombinasi Ctrl/Cmd — biarkan Ctrl+R, Ctrl+F11 dll tetap jalan)
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault(); // ← INI KUNCI: cegah browser routing karakter ke URL bar
+    }
+
+    // ── 2. Blokir Tab (pindah fokus antar elemen / address bar) ──
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        return;
+    }
+
+    // Hentikan proses jika passOk tidak valid
+    if (!passOk) return;
+
+    // ── 3. Abaikan modifier & function keys ──
+    const ignore = ['Shift','Control','Alt','Meta','CapsLock',
+                    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+                    'Home','End','PageUp','PageDown','Insert',
+                    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12',
+                    'Escape','PrintScreen','ScrollLock','Pause','NumLock'];
+    if (ignore.includes(e.key)) return;
+
+    // ── 4. Sedang memproses scan sebelumnya — buang karakter masuk ──
+    if (isLock) return;
+
+    // ── 5. Enter → langsung proses buffer (scanner kirim Enter di akhir) ──
+    if (e.key === 'Enter') {
+        if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+        if (scanBuffer.length >= 3) prosesScan(scanBuffer);
+        scanBuffer = '';
+        input.value = '';
+        return;
+    }
+
+    // ── 6. Backspace — koreksi manual (jarang dari scanner, tapi aman) ──
+    if (e.key === 'Backspace') {
+        scanBuffer = scanBuffer.slice(0, -1);
+        input.value = scanBuffer;
+        return;
+    }
+
+    // ── 7. Karakter normal — masukkan ke buffer ──
+    if (e.key.length === 1) {
+        scanBuffer += e.key;
+        input.value = scanBuffer; // tampilkan di field sebagai feedback visual
+
+        // TRIGGER A: Panjang buffer sudah = QR_LENGTH → proses langsung
+        if (scanBuffer.length >= QR_LENGTH) {
+            if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+            const captured = scanBuffer;
+            scanBuffer = '';
+            input.value = '';
+            prosesScan(captured);
+            return;
+        }
+
+        // TRIGGER B: Jeda SCAN_IDLE_MS tanpa karakter baru → proses (antisipasi scanner pendek)
+        if (scanTimer) clearTimeout(scanTimer);
+        scanTimer = setTimeout(() => {
+            scanTimer = null;
+            if (scanBuffer.length >= 3 && !isLock) {
+                const captured = scanBuffer;
+                scanBuffer = '';
+                input.value = '';
+                prosesScan(captured);
+            } else {
+                // Buffer terlalu pendek — kemungkinan ketikan manual yang tidak sengaja, buang
+                scanBuffer = '';
+                input.value = '';
+            }
+        }, SCAN_IDLE_MS);
+    }
+
+}, true); // ← useCapture: true → listener ini PERTAMA dieksekusi sebelum listener lain
+
+// ============================================================
+// FULLSCREEN & VISUAL FOCUS (tidak kritis untuk scanner)
+// ============================================================
+// Karena scanner sudah ditangkap via keydown capture di atas,
+// focus ke input hanya diperlukan untuk feedback visual saja.
+
+function enterFullscreen() {
     if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
     }
+}
+
+document.body.addEventListener('click', () => {
+    enterFullscreen();
     const kb = document.getElementById('kioskBanner');
     if (kb) kb.classList.remove('show');
     if (!isLock) input.focus();
-});
+}, { passive: true });
 
+// Kembalikan visual focus ke input saat blur — tapi bukan untuk tujuan capture scanner
 input.addEventListener('blur', () => {
-    setTimeout(() => { if (!isLock) input.focus(); }, 10);
+    if (!isLock) setTimeout(() => input.focus(), 30);
 });
 
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) setTimeout(() => { if (!isLock) input.focus(); }, 200);
+    if (!document.hidden) {
+        setTimeout(() => { if (!isLock) input.focus(); }, 300);
+    }
 });
+
 window.addEventListener('focus', () => {
-    setTimeout(() => { if (!isLock) input.focus(); }, 100);
+    setTimeout(() => { if (!isLock) input.focus(); }, 150);
 });
 
 // ============================================================
-// SCANNER — BUFFER MODE dengan trigger 10 karakter
+// FUNGSI UTAMA PROSES SCAN
 // ============================================================
-let scanBuffer = '';
-
-// Fungsi utama proses scan
 function prosesScan(idRaw) {
     const id = idRaw.trim();
     if (!id || id.length < 3) return;
     if (!passOk || isLock) return;
 
     isLock = true;
-    scanBuffer = '';
     input.value = '';
     input.placeholder = 'MOHON TUNGGU…';
     idleWm.style.display = 'none';
@@ -750,7 +851,7 @@ function prosesScan(idRaw) {
         const st = cekStatus(now);
         const em = statusEmoji(st);
 
-        if (st.terlambat)            putarRekaman('terlambat.wav');
+        if (st.terlambat)              putarRekaman('terlambat.wav');
         else if (st.sesi === 'Pulang') putarRekaman('pulang.wav');
         else                           putarRekaman('datang_berhasil.wav');
 
@@ -759,7 +860,7 @@ function prosesScan(idRaw) {
         popPesan.style.background = em.bg;
         popPesan.style.color = em.fg;
 
-        const jamScan = `${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
+        const jamScan   = `${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
         const unitLabel = pg ? pg.jabatan : '?';
 
         tambahRiwayat(pg ? pg.nama : id, pg ? pg.foto : fotoDefault, unitLabel, jamScan);
@@ -777,7 +878,7 @@ function prosesScan(idRaw) {
         const formData = new FormData();
         formData.append(FORM_ENTRY, id);
         fetch(FORM_URL, { method:'POST', mode:'no-cors', body: formData })
-            .then(() => console.log('✅ Presensi terkirim ke Google Forms:', id))
+            .then(() => console.log('✅ Presensi terkirim:', id))
             .catch(err => console.warn('⚠️ Form gagal terkirim:', err));
 
         scanHistory[id] = nowMs;
@@ -785,51 +886,6 @@ function prosesScan(idRaw) {
 
     setTimeout(resetUI, 4000);
 }
-
-// ── Global keydown — tangkap semua karakter dari scanner ──────
-// Logika: buffer menampung karakter satu-satu.
-// TRIGGER proses jika: (1) panjang buffer = QR_LENGTH, atau (2) Enter ditekan.
-document.addEventListener('keydown', function(e) {
-    if (!passOk || isLock) return;
-
-    // Abaikan modifier & function keys
-    const ignore = ['Shift','Control','Alt','Meta','CapsLock','Tab',
-                    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-                    'Home','End','PageUp','PageDown','Insert','Delete',
-                    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
-    if (ignore.includes(e.key)) return;
-
-    // Tab — cegah kursor lari ke address bar
-    if (e.key === 'Tab') { e.preventDefault(); input.focus(); return; }
-
-    // Enter — proses buffer apapun isinya
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        if (scanBuffer.length > 0) prosesScan(scanBuffer);
-        scanBuffer = '';
-        input.value = '';
-        return;
-    }
-
-    // Backspace
-    if (e.key === 'Backspace') {
-        scanBuffer = scanBuffer.slice(0, -1);
-        input.value = scanBuffer;
-        return;
-    }
-
-    // Karakter normal — tambah ke buffer
-    if (e.key.length === 1) {
-        scanBuffer += e.key;
-        input.value = scanBuffer;
-
-        // ── TRIGGER UTAMA: proses saat buffer tepat 10 karakter ──
-        if (scanBuffer.length >= QR_LENGTH) {
-            prosesScan(scanBuffer);
-            // prosesScan sudah set scanBuffer = '' di dalamnya
-        }
-    }
-});
 </script>
 </body>
 </html>
