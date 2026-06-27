@@ -461,7 +461,7 @@ async function kirimKeGAS(payload){
 }
 
 // ============================================================
-// SCANNER
+// SCANNER — Buffer Mode (kompatibel scanner USB/BT tanpa Enter)
 // ============================================================
 const input=document.getElementById('qrInput');
 const badge=document.getElementById('statusPesan');
@@ -474,6 +474,12 @@ const idleWm=document.getElementById('idleWatermark');
 const scanHistory={};
 const COOLDOWN=10*60*1000;
 let isLock=false,audioAktif=null;
+
+// Buffer scanner — menampung karakter masuk, proses setelah jeda 120ms
+// atau langsung saat Enter diterima
+let scanBuffer='';
+let scanTimer=null;
+const SCAN_TIMEOUT=120; // ms — sesuaikan jika scanner lambat (coba 150-200)
 
 function putarRekaman(f){if(audioAktif){audioAktif.pause();audioAktif.currentTime=0;}audioAktif=new Audio(f);audioAktif.play().catch(()=>{});}
 function tampilBadge(ikon,teks,bg,fg){badge.innerHTML=`<span style="font-size:20px">${ikon}</span><span>${teks}</span>`;badge.style.background=bg;badge.style.color=fg;badge.classList.add('visible');}
@@ -489,22 +495,46 @@ function resetUI(){
     popPesan.style.color='var(--gray-500)';
     idleWm.style.display='block';
     isLock=false;
+    scanBuffer='';
+    input.value='';
     input.readOnly=false;
     input.placeholder='Menunggu scan ID Card…';
+    // Kembalikan fokus dengan sedikit delay
+    setTimeout(()=>input.focus(),50);
+}
+
+// ── FOCUS LOCK — kursor selalu kembali ke input ──────────────
+function kunciKursor(){
+    if(!passOk||isLock) return;
     input.focus();
 }
 
 if(passOk){
-    document.addEventListener('click',()=>{if(!isLock)input.focus();});
-    input.addEventListener('blur',()=>{if(!isLock)setTimeout(()=>input.focus(),10);});
+    // Kunci kursor setiap klik di mana saja
+    document.addEventListener('click', kunciKursor);
+    document.addEventListener('touchend', kunciKursor);
+
+    // Kunci kursor saat blur dengan retry agresif
+    input.addEventListener('blur', ()=>{
+        if(!isLock){
+            setTimeout(kunciKursor, 10);
+            setTimeout(kunciKursor, 50);
+            setTimeout(kunciKursor, 150);
+        }
+    });
+
+    // Kunci kursor saat halaman kembali aktif (alt-tab dll)
+    document.addEventListener('visibilitychange', ()=>{
+        if(!document.hidden) setTimeout(kunciKursor, 200);
+    });
+    window.addEventListener('focus', ()=>setTimeout(kunciKursor, 100));
 }
 
-input.addEventListener('keydown',function(e){
-    if(e.key!=='Enter')return;
-    e.preventDefault();
-    if(!passOk||isLock){input.value='';return;}
-    const id=input.value.trim();
-    if(!id)return;
+// ── PROSES HASIL SCAN ────────────────────────────────────────
+function prosesHasilScan(id){
+    id = id.trim();
+    if(!id || id.length < 3) return; // abaikan input terlalu pendek
+    if(!passOk || isLock) return;
 
     isLock=true;
     input.readOnly=true;
@@ -529,7 +559,6 @@ input.addEventListener('keydown',function(e){
         const st=cekStatus(now);
         const em=statusEmoji(st);
 
-        // Pilih audio
         if(st.terlambat) putarRekaman('terlambat.wav');
         else if(st.sesi==='Pulang') putarRekaman('pulang.wav');
         else putarRekaman('datang_berhasil.wav');
@@ -539,11 +568,9 @@ input.addEventListener('keydown',function(e){
         popPesan.style.background=em.bg;
         popPesan.style.color=em.fg;
 
-        // Format data untuk GAS
         const jamScan=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
         const tgl=`${f2(now.getDate())}/${f2(now.getMonth()+1)}/${now.getFullYear()}`;
 
-        // Status teks sesuai kolom GSheet lama
         let statusTeks='🟢 Tepat Waktu';
         if(st.sabtu&&!st.terlambat) statusTeks='🟢 Sabtu Ontime';
         else if(st.terlambat) statusTeks='🔴 Terlambat';
@@ -552,8 +579,8 @@ input.addEventListener('keydown',function(e){
 
         kirimKeGAS({
             qrCode:   id,
-            namaGuru: pg ? pg.nama : null,
-            jabatan:  pg ? pg.jabatan : null,
+            namaGuru: pg?pg.nama:null,
+            jabatan:  pg?pg.jabatan:null,
             sesi:     st.sesi,
             status:   statusTeks,
             jamScan,
@@ -565,7 +592,50 @@ input.addEventListener('keydown',function(e){
     }
 
     input.value='';
+    scanBuffer='';
     setTimeout(resetUI,4000);
+}
+
+// ── LISTENER KEYBOARD — tangkap semua karakter di mana saja ──
+// Ini memastikan scan tetap berjalan walau kursor sempat kabur
+document.addEventListener('keydown', function(e){
+    if(!passOk || isLock) return;
+
+    // Abaikan modifier keys, function keys, navigation keys
+    const ignore=['Shift','Control','Alt','Meta','CapsLock','Tab',
+                  'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+                  'Home','End','PageUp','PageDown','Insert','Delete',
+                  'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
+    if(ignore.includes(e.key)) return;
+
+    if(e.key==='Enter'){
+        // Enter → langsung proses buffer
+        e.preventDefault();
+        if(scanTimer) clearTimeout(scanTimer);
+        if(scanBuffer.length>0) prosesHasilScan(scanBuffer);
+        scanBuffer='';
+        return;
+    }
+
+    if(e.key==='Backspace'){
+        scanBuffer=scanBuffer.slice(0,-1);
+        input.value=scanBuffer;
+        return;
+    }
+
+    // Karakter normal — tambah ke buffer
+    if(e.key.length===1){
+        scanBuffer+=e.key;
+        input.value=scanBuffer;
+
+        // Reset timer setiap karakter masuk
+        if(scanTimer) clearTimeout(scanTimer);
+        scanTimer=setTimeout(()=>{
+            // Setelah SCAN_TIMEOUT ms tanpa karakter baru → proses
+            if(scanBuffer.length>=4) prosesHasilScan(scanBuffer);
+            scanBuffer='';
+        }, SCAN_TIMEOUT);
+    }
 });
 </script>
 </body>
