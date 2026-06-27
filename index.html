@@ -619,12 +619,38 @@ document.body.addEventListener('click', () => {
     const kioskBanner = document.getElementById('kioskBanner');
     if (kioskBanner) kioskBanner.classList.remove('show');
     
-    // Kembalikan fokus ke input QR
-    if (!isLock) input.focus();
+    // Kembalikan fokus ke input QR secara paksa, 
+    // HAPUS kondisi `if (!isLock)` agar kotak input SELALU siap menerima fokus 
+    // meskipun sedang memproses data.
+    input.focus();
 });
-// Paksa kursor kembali ke kotak input dalam kondisi apapun (meskipun sedang loading)
+
+// Paksa kursor kembali ke kotak input saat kehilangan fokus (blur)
 input.addEventListener('blur', () => {
-    setTimeout(() => input.focus(), 10);
+    // Gunakan requestAnimationFrame atau timeout untuk memastikan eksekusi
+    setTimeout(() => {
+        input.focus();
+    }, 10);
+});
+
+// 🌟 TAMBAHAN BARU: Global Keydown Interceptor
+// Menangkap pergerakan dan ketikan scanner secara global agar tidak lari ke luar
+document.addEventListener('keydown', (e) => {
+    // 1. Cegah scanner mengirim "Tab" yang membuat kursor melompat ke Address Bar
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        input.focus();
+        return;
+    }
+
+    // 2. Jika ada tombol yang ditekan tapi fokus BUKAN di dalam kotak input
+    if (document.activeElement !== input) {
+        // Biarkan tombol sistem peramban tetap berfungsi (seperti F5, F11)
+        if (e.key.length > 1 && e.key !== 'Enter') return; 
+        
+        // Pindahkan fokus kembali ke kotak input sebelum karakter terketik
+        input.focus();
+    }
 });
 
 
