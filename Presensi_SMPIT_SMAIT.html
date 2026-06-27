@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presensi SMPIT & SMAIT – Ar-Rahmah</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sky:#0ea5e9;--sky-dark:#0284c7;--sky-light:#e0f2fe;--sky-pale:#f0f9ff;
+            --gold:#d4a017;--gold-light:#fef3c7;--gold-bright:#f59e0b;
+            --white:#ffffff;--gray-50:#f8fafc;--gray-100:#f1f5f9;
+            --gray-300:#cbd5e1;--gray-500:#64748b;--gray-700:#334155;--gray-900:#0f172a;
+            --green:#16a34a;--green-light:#dcfce7;
+            --orange:#ea580c;--orange-light:#fff7ed;
+            --red:#dc2626;--blue:#2563eb;--blue-light:#dbeafe;
+            --teal:#0d9488;--teal-light:#ccfbf1;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+
+        #accessBlock{display:none;position:fixed;inset:0;background:#0f172a;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;}
+        #accessBlock.show{display:flex;}
+        #accessBlock svg{color:#ef4444;width:56px;height:56px;}
+        #accessBlock p{color:#ef4444;font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:600;}
+        #accessBlock small{color:#475569;font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;}
+
+        #loadingConfig{display:none;position:fixed;inset:0;background:rgba(12,74,110,.92);align-items:center;justify-content:center;z-index:9998;flex-direction:column;gap:12px;}
+        #loadingConfig.show{display:flex;}
+        .spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        #loadingConfig p{color:rgba(255,255,255,.85);font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:500;}
+
+        body{font-family:'Plus Jakarta Sans',sans-serif;background:linear-gradient(145deg,#0c4a6e 0%,#075985 40%,#0369a1 100%);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 20px;position:relative;overflow-x:hidden;}
+        body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle at 20% 20%,rgba(212,160,23,.08) 0%,transparent 50%),radial-gradient(circle at 80% 80%,rgba(14,165,233,.12) 0%,transparent 50%),repeating-linear-gradient(45deg,transparent,transparent 40px,rgba(255,255,255,.015) 40px,rgba(255,255,255,.015) 41px);pointer-events:none;z-index:0;}
+
+        .config-bar{width:100%;max-width:1120px;margin-bottom:12px;display:flex;align-items:center;gap:10px;position:relative;z-index:1;}
+        .config-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:default;transition:.2s;}
+        .config-pill.ok{background:rgba(22,163,74,.2);color:#86efac;border:1px solid rgba(22,163,74,.35);}
+        .config-pill.err{background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.35);}
+        .config-pill.load{background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.15);}
+        .config-dot{width:6px;height:6px;border-radius:50%;}
+        .ok .config-dot{background:#86efac;animation:pulse2 2s ease-in-out infinite;}
+        .err .config-dot{background:#fca5a5;}
+        .load .config-dot{background:rgba(255,255,255,.5);}
+        @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.4}}
+        .refresh-btn{margin-left:auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.5px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:.2s;}
+        .refresh-btn:hover{background:rgba(255,255,255,.15);color:#fff;}
+
+        .header{width:100%;max-width:1120px;display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:28px;position:relative;z-index:1;}
+        .header-logo{height:72px;width:auto;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.25));}
+        .header-divider{width:2px;height:56px;background:linear-gradient(to bottom,transparent,rgba(212,160,23,.6),transparent);}
+        .header-text h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.3px;line-height:1.2;}
+        .header-text p{font-size:13px;font-weight:500;color:rgba(212,160,23,.9);margin-top:3px;letter-spacing:.5px;text-transform:uppercase;}
+        .unit-tags{display:flex;gap:6px;margin-top:8px;}
+        .unit-tag{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;}
+        .unit-tag.smpit{background:rgba(13,148,136,.25);color:#5eead4;border:1px solid rgba(13,148,136,.4);}
+        .unit-tag.smait{background:rgba(212,160,23,.25);color:#fcd34d;border:1px solid rgba(212,160,23,.4);}
+
+        .wrapper{display:flex;gap:20px;width:100%;max-width:1120px;position:relative;z-index:1;}
+        .panel{background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.1) inset;overflow:hidden;}
+        .left-panel{flex:1.1;display:flex;flex-direction:column;}
+        .left-panel::before{content:'';display:block;height:5px;background:linear-gradient(90deg,var(--gold),var(--gold-bright),var(--gold));flex-shrink:0;}
+        .left-inner{padding:36px 40px 32px;display:flex;flex-direction:column;flex:1;}
+        .scan-label{font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--sky-dark);margin-bottom:10px;}
+        .scan-subtitle{font-size:15px;color:var(--gray-500);margin-bottom:20px;font-weight:500;}
+
+        .jam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px;}
+        .jam-chip{background:var(--gray-50);border:1px solid var(--gray-100);border-radius:10px;padding:10px 12px;text-align:center;}
+        .jam-chip-label{font-size:10px;font-weight:700;color:var(--gray-500);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;}
+        .jam-chip-value{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gray-900);}
+        .jam-chip.hi{background:var(--sky-light);border-color:var(--sky);}
+        .jam-chip.hi .jam-chip-value{color:var(--sky-dark);}
+
+        .input-wrapper{position:relative;margin-bottom:16px;}
+        .input-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:22px;height:22px;color:var(--sky);pointer-events:none;}
+        input#qrInput{width:100%;padding:20px 20px 20px 52px;font-family:'DM Mono',monospace;font-size:20px;font-weight:500;text-align:left;border:2.5px solid var(--gray-300);border-radius:14px;background:var(--gray-50);color:var(--gray-900);outline:none;transition:all .25s;letter-spacing:1px;}
+        input#qrInput::placeholder{color:var(--gray-300);font-size:16px;letter-spacing:0;font-family:'Plus Jakarta Sans',sans-serif;}
+        input#qrInput:focus{border-color:var(--sky);background:#fff;box-shadow:0 0 0 4px rgba(14,165,233,.12);}
+        input#qrInput:read-only{background:var(--gray-100);border-color:var(--gray-300);color:var(--gray-500);cursor:not-allowed;}
+
+        .status-badge{display:flex;align-items:center;gap:10px;padding:14px 20px;border-radius:12px;font-size:16px;font-weight:700;opacity:0;transform:translateY(6px);transition:all .35s cubic-bezier(.34,1.56,.64,1);margin-bottom:10px;min-height:52px;}
+        .status-badge.visible{opacity:1;transform:translateY(0);}
+
+        .time-widget{margin-top:auto;padding-top:24px;border-top:1.5px dashed var(--gray-300);display:flex;justify-content:space-between;align-items:flex-end;}
+        .clock-main{font-family:'DM Mono',monospace;font-size:44px;font-weight:500;color:var(--gray-900);letter-spacing:-1px;line-height:1;}
+        .clock-date{font-size:13px;font-weight:600;color:var(--gray-500);margin-top:6px;}
+        .countdown-box{text-align:right;}
+        .countdown-pill{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
+        .countdown-value{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;line-height:1;}
+        .state-piket .countdown-pill{background:var(--gold-light);color:var(--gold);}
+        .state-piket .countdown-value{color:var(--gold);}
+        .state-normal .countdown-pill{background:var(--green-light);color:var(--green);}
+        .state-normal .countdown-value{color:var(--green);}
+        .state-telat .countdown-pill{background:#fee2e2;color:var(--red);}
+        .state-telat .countdown-value{color:var(--red);}
+        .state-pulang .countdown-pill{background:var(--blue-light);color:var(--blue);}
+        .state-pulang .countdown-value{color:var(--blue);}
+        .state-sabtu .countdown-pill{background:var(--teal-light);color:var(--teal);}
+        .state-sabtu .countdown-value{color:var(--teal);}
+
+        .right-panel{flex:.85;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;position:relative;background:linear-gradient(160deg,var(--sky-pale) 0%,#fff 60%);}
+        .right-panel::after{content:'';position:absolute;top:0;right:0;width:120px;height:120px;background:linear-gradient(225deg,rgba(14,165,233,.1),transparent);border-radius:0 20px 0 100%;}
+        .foto-ring{position:relative;margin-bottom:24px;}
+        .foto-ring::before{content:'';position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(var(--gold) 0deg,var(--sky) 120deg,var(--gold-bright) 240deg,var(--gold) 360deg);animation:spinRing 6s linear infinite;opacity:.7;}
+        @keyframes spinRing{to{transform:rotate(360deg);}}
+        .foto-bg{position:relative;width:200px;height:200px;border-radius:50%;background:#fff;padding:5px;z-index:1;}
+        .foto-profil{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;transition:all .4s;}
+        .nama-profil{font-size:22px;font-weight:800;color:var(--gray-900);text-align:center;margin-bottom:8px;min-height:32px;line-height:1.3;z-index:1;}
+        .unit-profil{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-bottom:16px;z-index:1;padding:3px 12px;border-radius:20px;}
+        .unit-profil.smpit{background:var(--teal-light);color:var(--teal);}
+        .unit-profil.smait{background:var(--gold-light);color:var(--gold);}
+        .unit-profil.yayasan{background:var(--blue-light);color:var(--blue);}
+        .unit-profil.unknown{background:var(--gray-100);color:var(--gray-500);}
+        .pesan-chip{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border-radius:40px;font-size:15px;font-weight:700;background:var(--gray-100);color:var(--gray-500);transition:all .4s cubic-bezier(.34,1.56,.64,1);z-index:1;}
+        .idle-watermark{margin-top:24px;text-align:center;opacity:.35;z-index:1;}
+        .idle-watermark svg{width:48px;height:48px;color:var(--sky-dark);}
+        .idle-watermark p{font-size:12px;font-weight:600;color:var(--sky-dark);margin-top:8px;letter-spacing:.5px;text-transform:uppercase;}
+
+        @media(max-width:768px){.wrapper{flex-direction:column;}.header{flex-direction:column;text-align:center;}.header-divider{width:60px;height:2px;}.clock-main{font-size:32px;}.jam-grid{grid-template-columns:repeat(2,1fr);}}
+    </style>
+</head>
+<body>
+
+<div id="accessBlock">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <p>Akses Tidak Diizinkan</p>
+    <small>Hubungi administrator untuk mendapatkan tautan yang benar.</small>
+</div>
+
+<div id="loadingConfig" class="show">
+    <div class="spinner"></div>
+    <p id="loadingText">Memuat konfigurasi jam dari server…</p>
+</div>
+
+<div class="config-bar">
+    <div class="config-pill load" id="configPill">
+        <div class="config-dot"></div>
+        <span id="configPillText">Menghubungi GAS…</span>
+    </div>
+    <button class="refresh-btn" onclick="fetchJamConfig()">↺ Perbarui Jam</button>
+</div>
+
+<div class="header">
+    <img src="logo.png" alt="Logo Yayasan Ar-Rahmah" class="header-logo">
+    <div class="header-divider"></div>
+    <div class="header-text">
+        <h1>Yayasan Ar-Rahmah Sulawesi</h1>
+        <p>Sistem Presensi Digital – SMPIT &amp; SMAIT</p>
+        <div class="unit-tags">
+            <span class="unit-tag smpit">SMPIT</span>
+            <span class="unit-tag smait">SMAIT</span>
+        </div>
+    </div>
+</div>
+
+<div class="wrapper">
+    <div class="panel left-panel">
+        <div class="left-inner">
+            <div class="scan-label">Presensi Kehadiran</div>
+            <div class="scan-subtitle">Bismillah – silakan tempelkan atau scan ID Card Anda</div>
+
+            <div class="jam-grid">
+                <div class="jam-chip hi"><div class="jam-chip-label">Jam Masuk</div><div class="jam-chip-value" id="dispJamMasuk">--:--</div></div>
+                <div class="jam-chip hi"><div class="jam-chip-label">Jam Pulang</div><div class="jam-chip-value" id="dispJamPulang">--:--</div></div>
+                <div class="jam-chip"><div class="jam-chip-label">Jam Sabtu</div><div class="jam-chip-value" id="dispJamSabtu">--:--</div></div>
+                <div class="jam-chip"><div class="jam-chip-label">CS Datang</div><div class="jam-chip-value" id="dispCsDatang">--:--</div></div>
+                <div class="jam-chip"><div class="jam-chip-label">CS Pulang</div><div class="jam-chip-value" id="dispCsPulang">--:--</div></div>
+                <div class="jam-chip"><div class="jam-chip-label">CS Sabtu</div><div class="jam-chip-value" id="dispCsSabtu">--:--</div></div>
+            </div>
+
+            <div class="input-wrapper">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <path d="M14 14h2v2h-2zm0 4h2v2h-2zm4-4h2v2h-2zm0 4h2v2h-2z"/>
+                </svg>
+                <input type="text" id="qrInput" placeholder="Menunggu scan ID Card…" autocomplete="off" autofocus>
+            </div>
+
+            <div class="status-badge" id="statusPesan"></div>
+
+            <div class="time-widget">
+                <div>
+                    <div class="clock-main" id="displayClock">00:00:00</div>
+                    <div class="clock-date" id="displayDate">Memuat…</div>
+                </div>
+                <div class="countdown-box" id="infoCard">
+                    <div class="countdown-pill" id="statusLabel">Menghitung…</div>
+                    <div class="countdown-value" id="displayCountdown">-- : --</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel right-panel">
+        <div class="foto-ring">
+            <div class="foto-bg">
+                <img id="popFoto" src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png" alt="Foto" class="foto-profil">
+            </div>
+        </div>
+        <div class="nama-profil" id="popNama">Siap Menerima Scan</div>
+        <div class="unit-profil unknown" id="popUnit">–</div>
+        <div class="pesan-chip" id="popPesan"><span>Menunggu…</span></div>
+        <div class="idle-watermark" id="idleWatermark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <p>Sistem Aktif &amp; Aman</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// KONFIGURASI — edit bagian ini saja
+// ============================================================
+const PASS_VALID = "112233";   // ganti jika perlu
+
+// Setelah deploy GAS, paste Web App URL di sini:
+const GAS_URL = "https://script.google.com/macros/s/AKfycbypkJDuEYdYrNGT5XwwGXw2z0WGoqrMrKESWasiUBiqTMgvFdFTGPlP5oE8NWzZX5k/exec";
+
+// Fallback jam jika GAS tidak terjangkau
+const JAM_FALLBACK = {
+    jamMasuk:"08:00", jamPulang:"14:00", jamSabtu:"08:00",
+    jamPiket:"08:00", csDatang:"06:45", csPulang:"15:00", csSabtu:"07:15"
+};
+
+// ============================================================
+// CEK AKSES
+// ============================================================
+const passOk = new URLSearchParams(window.location.search).get('pass') === PASS_VALID;
+if (!passOk) {
+    document.getElementById('accessBlock').classList.add('show');
+    document.getElementById('loadingConfig').classList.remove('show');
+    document.querySelectorAll('body > *:not(#accessBlock):not(#loadingConfig)')
+        .forEach(el => el.style.visibility = 'hidden');
+}
+
+// ============================================================
+// JAM CONFIG
+// ============================================================
+let JAM = {};
+
+function parseHHMM(str) {
+    if (!str) return null;
+    const m = str.toString().match(/(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return { h: parseInt(m[1]), m: parseInt(m[2]) };
+}
+
+function toSec(h, m) { return h * 3600 + m * 60; }
+
+function applyJamObj(obj) {
+    // obj: { jamMasuk:"08:00", jamPulang:"14:00", ... }
+    for (const [key, val] of Object.entries(obj)) {
+        const p = parseHHMM(val);
+        if (p) { JAM[key+'H'] = p.h; JAM[key+'M'] = p.m; }
+    }
+}
+
+function updateJamDisplay() {
+    const f = (h,m) => `${String(h||0).padStart(2,'0')}:${String(m||0).padStart(2,'0')}`;
+    document.getElementById('dispJamMasuk').textContent  = f(JAM.jamMasukH,  JAM.jamMasukM);
+    document.getElementById('dispJamPulang').textContent = f(JAM.jamPulangH, JAM.jamPulangM);
+    document.getElementById('dispJamSabtu').textContent  = f(JAM.jamSabtuH,  JAM.jamSabtuM);
+    document.getElementById('dispCsDatang').textContent  = f(JAM.csDatangH,  JAM.csDatangM);
+    document.getElementById('dispCsPulang').textContent  = f(JAM.csPulangH,  JAM.csPulangM);
+    document.getElementById('dispCsSabtu').textContent   = f(JAM.csSabtuH,   JAM.csSabtuM);
+}
+
+async function fetchJamConfig() {
+    const pill     = document.getElementById('configPill');
+    const pillText = document.getElementById('configPillText');
+    pill.className = 'config-pill load';
+    pillText.textContent = 'Menghubungi server…';
+
+    try {
+        // GAS doGet — ambil config jam
+        const res  = await fetch(GAS_URL, { cache: 'no-store' });
+        const data = await res.json();
+
+        if (data.ok && data.jam) {
+            applyJamObj(data.jam);
+            updateJamDisplay();
+            const now = new Date();
+            const ts  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            pill.className = 'config-pill ok';
+            pillText.textContent = `Jam diperbarui dari GSheet · ${ts}`;
+        } else {
+            throw new Error(data.error || 'Response tidak valid');
+        }
+    } catch(e) {
+        applyJamObj(JAM_FALLBACK);
+        updateJamDisplay();
+        pill.className = 'config-pill err';
+        pillText.textContent = 'GAS tidak terjangkau — pakai jam default';
+        console.warn('fetchJamConfig:', e.message);
+    } finally {
+        document.getElementById('loadingConfig').classList.remove('show');
+    }
+}
+
+// Init
+applyJamObj(JAM_FALLBACK);
+updateJamDisplay();
+if (passOk) {
+    fetchJamConfig();
+    setInterval(fetchJamConfig, 10 * 60 * 1000);
+} else {
+    document.getElementById('loadingConfig').classList.remove('show');
+}
+
+// ============================================================
+// DATABASE PEGAWAI
+// ============================================================
+const dataPegawai = {
+    "SDIT-45C20":{"nama":"Jum Mutmainnah, S.E.","foto":"foto/jum.jpg","jabatan":"Yayasan"},
+    "SDIT-45C21":{"nama":"Suwardi Hasan, S.Pd., Gr., CPPS.","foto":"foto/suwardi.jpg","jabatan":"Yayasan"},
+    "SDIT-45C22":{"nama":"A. Musriadi, S.T.","foto":"foto/musriadi.jpg","jabatan":"Yayasan"},
+    "SDIT-45C23":{"nama":"Abd. Wahab","foto":"foto/abdwahab.jpg","jabatan":"Yayasan"},
+    "SDIT-45C24":{"nama":"Firman R., S.Pd., Gr.","foto":"foto/firman.jpg","jabatan":"Yayasan"},
+    "SDIT-45C25":{"nama":"Saiful Akbar, S.Si.","foto":"foto/saiful.jpg","jabatan":"Yayasan"},
+    "SIT_AR-6E815":{"nama":"Agung Haris, S.H.","foto":"foto/agung.jpg","jabatan":"SMPIT"},
+    "SIT_AR-2D0BE":{"nama":"Firman G., S.Pd., Gr.","foto":"foto/firmang.jpg","jabatan":"SMPIT"},
+    "SIT_AR-ACD44":{"nama":"Firmansyah, S.Si.","foto":"foto/firmansyah.jpg","jabatan":"SMPIT"},
+    "SIT_AR-B54DE":{"nama":"Galuh Prameswari Nuswantoro, S.Pd., M.Pd., Gr.","foto":"foto/galuh.jpg","jabatan":"SMPIT"},
+    "SIT_AR-C8B8D":{"nama":"Hikmatiar, S.Pd.","foto":"foto/hikmatiar.jpg","jabatan":"SMPIT"},
+    "SIT_AR-D50DA":{"nama":"Marlia, S.Pd., Gr.","foto":"foto/marlia.jpg","jabatan":"SMPIT"},
+    "SIT_AR-AB26D":{"nama":"Muh. Ardiansyah","foto":"foto/ardiansyah.jpg","jabatan":"SMPIT"},
+    "SIT_AR-8C7B7":{"nama":"Muhammad Aras, S.H.I.","foto":"foto/aras.jpg","jabatan":"SMPIT"},
+    "SIT_AR-90C5A":{"nama":"Muhammad Said Al Murtadho, S.Pd.I., M.Pd.","foto":"foto/said.jpg","jabatan":"SMPIT"},
+    "SIT_AR-89A6B":{"nama":"Noviar Syamsuryah S., S.Si., Gr.","foto":"foto/noviar.jpg","jabatan":"SMPIT"},
+    "SIT_AR-58291":{"nama":"Nur Ismi Laila, S.Pd.","foto":"foto/nurismi.jpg","jabatan":"SMPIT"},
+    "SIT_AR-942C1":{"nama":"Nurjana Bin Wahab","foto":"foto/nurjana.jpg","jabatan":"SMPIT"},
+    "SIT_AR-E12A5":{"nama":"Nurjannah R., S.E., Gr.","foto":"foto/nurjannah.jpg","jabatan":"SMPIT"},
+    "SIT_AR-74070":{"nama":"Nurul Fadillah, S.Pd., Gr.","foto":"foto/nurulfadillah.jpg","jabatan":"SMPIT"},
+    "SIT_AR-D2B55":{"nama":"Ridwan","foto":"foto/ridwan.jpg","jabatan":"SMPIT"},
+    "SIT_AR-B65F0":{"nama":"Sudirman Sahabuddin, S.H.","foto":"foto/sudirman.jpg","jabatan":"SMPIT"},
+    "SIT_AR-58F53":{"nama":"Supriyadi","foto":"foto/supriyadi.jpg","jabatan":"SMPIT"},
+    "SIT_AR-8B47B":{"nama":"Uswatul Ilmi, S.IP., M.IP.","foto":"foto/uswatul.jpg","jabatan":"SMPIT"},
+    "SIT_AR-95D23":{"nama":"Wirajaya Afandi, S.Pd., Gr.","foto":"foto/wirajaya.jpg","jabatan":"SMPIT"},
+    "SIT_AR-C5BEE":{"nama":"Abd. Hasyia Rahman, S.Pd., Gr.","foto":"foto/hasyia.jpg","jabatan":"SMAIT"},
+    "SIT_AR-484E4":{"nama":"Andi Idham Bintang, A.Md.Kom.","foto":"foto/idham.jpg","jabatan":"SMAIT"},
+    "SIT_AR-EE051":{"nama":"Buraerah, S.Pd.I.","foto":"foto/buraerah.jpg","jabatan":"SMAIT"},
+    "SIT_AR-4EC3E":{"nama":"Dewi Karmila Sari, S.Pd., Gr.","foto":"foto/dewikarmila.jpg","jabatan":"SMAIT"},
+    "SIT_AR-2681D":{"nama":"Haliana, S.Pd., Gr.","foto":"foto/haliana.jpg","jabatan":"SMAIT"},
+    "SIT_AR-9961C":{"nama":"Harfianti Amiruddin, S.Si., Gr.","foto":"foto/harfianti.jpg","jabatan":"SMAIT"},
+    "SIT_AR-BB309":{"nama":"Hilmia Azhar, S.Pd., Gr.","foto":"foto/hilmia.jpg","jabatan":"SMAIT"},
+    "SIT_AR-1CC0C":{"nama":"Husniah, S.Sos.","foto":"foto/husniah.jpg","jabatan":"SMAIT"},
+    "SIT_AR-9CE7F":{"nama":"La Ode Santun, S.Pd.","foto":"foto/laode.jpg","jabatan":"SMAIT"},
+    "SIT_AR-1A9ED":{"nama":"Megawati, S.Pd., Gr.","foto":"foto/megawati.jpg","jabatan":"SMAIT"},
+    "SIT_AR-95887":{"nama":"Muh. Muhaimin Jamaluddin, S.Hum., Gr.","foto":"foto/muhaimin.jpg","jabatan":"SMAIT"},
+    "SIT_AR-B99EB":{"nama":"Muh. Zaenal, A.Md.Pi.","foto":"foto/zaenal.jpg","jabatan":"SMAIT"},
+    "SIT_AR-E9826":{"nama":"Mukrimah Hamzah, S.E., Gr.","foto":"foto/mukrimah.jpg","jabatan":"SMAIT"},
+    "SIT_AR-84822":{"nama":"Muslim Mubarok, A.Md, S.Pd.I., M.Pd., Gr.","foto":"foto/muslim.jpg","jabatan":"SMAIT"},
+    "SIT_AR-7D2A2":{"nama":"Putri Salsabila, S.Pd.","foto":"foto/putri.jpg","jabatan":"SMAIT"},
+    "SIT_AR-E1C90":{"nama":"Rezky Nur Ariatami, S.Pd., M.Pd.","foto":"foto/rezky.jpg","jabatan":"SMAIT"},
+    "SIT_AR-A95BD":{"nama":"Suhardiman Bahar, A.Md.Kom.","foto":"foto/suhardiman.jpg","jabatan":"SMAIT"},
+    "SIT_AR-ED40B":{"nama":"Sulastri Suluwetang","foto":"foto/sulastri.jpg","jabatan":"SMAIT"},
+    "SIT_AR-57845":{"nama":"Zahrah Mardhiyah, S.Si.","foto":"foto/zahrah.jpg","jabatan":"SMAIT"},
+    "SIT_AR-8E977":{"nama":"Zulfadhli, S.Pd., Gr.","foto":"foto/zulfadhli.jpg","jabatan":"SMAIT"},
+};
+const fotoDefault = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png";
+
+// ============================================================
+// JAM & COUNTDOWN
+// ============================================================
+function f2(n){return n<10?'0'+n:''+n;}
+function isSabtu(d){return d.getDay()===6;}
+
+function updateWaktu(){
+    const now=new Date();
+    document.getElementById('displayClock').textContent=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
+    const hari=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    const bulan=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    document.getElementById('displayDate').textContent=`${hari[now.getDay()]}, ${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}`;
+
+    const lbl=document.getElementById('statusLabel');
+    const cd=document.getElementById('displayCountdown');
+    const card=document.getElementById('infoCard');
+    card.className='countdown-box';
+
+    const h=now.getHours(),m=now.getMinutes(),s=now.getSeconds();
+    const nowSec=h*3600+m*60+s;
+
+    const sec=(hh,mm)=>hh*3600+mm*60;
+
+    if(isSabtu(now)){
+        const batSec=sec(JAM.jamSabtuH||8,JAM.jamSabtuM||0);
+        const csSec=sec(JAM.csSabtuH||7,JAM.csSabtuM||15);
+        if(nowSec<csSec){const sisa=csSec-nowSec;lbl.textContent=`CS Sabtu (${f2(JAM.csSabtuH||7)}:${f2(JAM.csSabtuM||15)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-sabtu');}
+        else if(nowSec<batSec){const sisa=batSec-nowSec;lbl.textContent=`Batas Sabtu (${f2(JAM.jamSabtuH||8)}:${f2(JAM.jamSabtuM||0)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-normal');}
+        else{lbl.textContent='Sabtu – Terlambat';cd.textContent='TERLAMBAT';card.classList.add('state-telat');}
+    } else {
+        const masukSec=sec(JAM.jamMasukH||8,JAM.jamMasukM||0);
+        const pulangSec=sec(JAM.jamPulangH||14,JAM.jamPulangM||0);
+        const csDataSec=sec(JAM.csDatangH||6,JAM.csDatangM||45);
+        const csPulSec=sec(JAM.csPulangH||15,JAM.csPulangM||0);
+        if(nowSec<csDataSec){const sisa=csDataSec-nowSec;lbl.textContent=`CS Datang (${f2(JAM.csDatangH||6)}:${f2(JAM.csDatangM||45)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-piket');}
+        else if(nowSec<masukSec){const sisa=masukSec-nowSec;lbl.textContent=`Batas Masuk (${f2(JAM.jamMasukH||8)}:${f2(JAM.jamMasukM||0)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-normal');}
+        else if(h<12){lbl.textContent='Batas Kedatangan';cd.textContent='TERLAMBAT';card.classList.add('state-telat');}
+        else if(nowSec<pulangSec){const sisa=pulangSec-nowSec;lbl.textContent=`Menuju Pulang (${f2(JAM.jamPulangH||14)}:${f2(JAM.jamPulangM||0)})`;cd.textContent=`${Math.floor(sisa/3600)}j : ${f2(Math.floor((sisa%3600)/60))}m`;card.classList.add('state-pulang');}
+        else if(nowSec<csPulSec){const sisa=csPulSec-nowSec;lbl.textContent=`CS Pulang (${f2(JAM.csPulangH||15)}:${f2(JAM.csPulangM||0)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-pulang');}
+        else{lbl.textContent='Waktu Mengajar Selesai';cd.textContent='MODE PULANG';card.classList.add('state-normal');}
+    }
+}
+setInterval(updateWaktu,1000);
+updateWaktu();
+
+// ============================================================
+// STATUS SCAN
+// ============================================================
+function cekStatus(now){
+    const h=now.getHours(),m=now.getMinutes();
+    const nowMin=h*60+m;
+    if(isSabtu(now)){
+        const bat=(JAM.jamSabtuH||8)*60+(JAM.jamSabtuM||0);
+        return{sesi:'Datang',terlambat:nowMin>bat,pulangCepat:false,sabtu:true};
+    }
+    const masuk=(JAM.jamMasukH||8)*60+(JAM.jamMasukM||0);
+    const pulang=(JAM.jamPulangH||14)*60+(JAM.jamPulangM||0);
+    if(h<12) return{sesi:'Datang',terlambat:nowMin>masuk,pulangCepat:false,sabtu:false};
+    return{sesi:'Pulang',terlambat:false,pulangCepat:nowMin<pulang,sabtu:false};
+}
+
+function statusLabel(st,sabtu){
+    if(sabtu&&!st.terlambat) return'🟢 Sabtu Ontime';
+    if(st.terlambat) return'🔴 Terlambat';
+    if(st.sesi==='Pulang'&&st.pulangCepat) return'🟡 Pulang Cepat';
+    if(st.sesi==='Pulang') return'🔵 Pulang Berhasil';
+    return'🟢 Tepat Waktu';
+}
+
+function statusEmoji(st){
+    if(st.sabtu&&!st.terlambat) return{ikon:'✅',teks:'Sabtu – Hadir Tepat Waktu',bg:'var(--teal-light)',fg:'var(--teal)'};
+    if(st.terlambat) return{ikon:'🕐',teks:'Datang – Terlambat',bg:'var(--orange-light)',fg:'var(--orange)'};
+    if(st.sesi==='Pulang'&&st.pulangCepat) return{ikon:'🌤️',teks:'Pulang – Lebih Awal',bg:'var(--gold-light)',fg:'var(--gold)'};
+    if(st.sesi==='Pulang') return{ikon:'🌙',teks:'Pulang – Berhasil',bg:'var(--blue-light)',fg:'var(--blue)'};
+    return{ikon:'✅',teks:'Datang – Berhasil dicatat',bg:'var(--green-light)',fg:'var(--green)'};
+}
+
+// ============================================================
+// KIRIM DATA KE GAS
+// ============================================================
+function jenisHariStr(now){
+    const d=now.getDay();
+    if(d===0) return'Minggu';
+    if(d===6) return'Sabtu';
+    return'Hari Kerja';
+}
+
+async function kirimKeGAS(payload){
+    try{
+        await fetch(GAS_URL,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(payload)
+        });
+    }catch(e){
+        console.warn('GAS POST gagal:',e.message);
+        // Tidak crash — scan tetap jalan meski GAS timeout
+    }
+}
+
+// ============================================================
+// SCANNER
+// ============================================================
+const input=document.getElementById('qrInput');
+const badge=document.getElementById('statusPesan');
+const popFoto=document.getElementById('popFoto');
+const popNama=document.getElementById('popNama');
+const popUnit=document.getElementById('popUnit');
+const popPesan=document.getElementById('popPesan');
+const idleWm=document.getElementById('idleWatermark');
+
+const scanHistory={};
+const COOLDOWN=10*60*1000;
+let isLock=false,audioAktif=null;
+
+function putarRekaman(f){if(audioAktif){audioAktif.pause();audioAktif.currentTime=0;}audioAktif=new Audio(f);audioAktif.play().catch(()=>{});}
+function tampilBadge(ikon,teks,bg,fg){badge.innerHTML=`<span style="font-size:20px">${ikon}</span><span>${teks}</span>`;badge.style.background=bg;badge.style.color=fg;badge.classList.add('visible');}
+function tampilUnit(j){popUnit.textContent=j||'–';popUnit.className='unit-profil';const cls={SMPIT:'smpit',SMAIT:'smait',Yayasan:'yayasan'};popUnit.classList.add(cls[j]||'unknown');}
+
+function resetUI(){
+    badge.classList.remove('visible');
+    popFoto.src=fotoDefault;
+    popNama.textContent='Siap Menerima Scan';
+    tampilUnit('–');
+    popPesan.innerHTML='<span>Menunggu…</span>';
+    popPesan.style.background='var(--gray-100)';
+    popPesan.style.color='var(--gray-500)';
+    idleWm.style.display='block';
+    isLock=false;
+    input.readOnly=false;
+    input.placeholder='Menunggu scan ID Card…';
+    input.focus();
+}
+
+if(passOk){
+    document.addEventListener('click',()=>{if(!isLock)input.focus();});
+    input.addEventListener('blur',()=>{if(!isLock)setTimeout(()=>input.focus(),10);});
+}
+
+input.addEventListener('keydown',function(e){
+    if(e.key!=='Enter')return;
+    e.preventDefault();
+    if(!passOk||isLock){input.value='';return;}
+    const id=input.value.trim();
+    if(!id)return;
+
+    isLock=true;
+    input.readOnly=true;
+    input.placeholder='MOHON TUNGGU…';
+    idleWm.style.display='none';
+
+    const pg=dataPegawai[id];
+    popNama.textContent=pg?pg.nama:id;
+    popFoto.src=pg?pg.foto:fotoDefault;
+    tampilUnit(pg?pg.jabatan:'⚠️ Tak Dikenal');
+
+    const nowMs=Date.now();
+    const now=new Date();
+
+    if(scanHistory[id]&&(nowMs-scanHistory[id]<COOLDOWN)){
+        putarRekaman('sudah_scan.wav');
+        tampilBadge('⚠️','Anda sudah melakukan presensi','var(--orange-light)','var(--orange)');
+        popPesan.innerHTML='<span>⚠️ SUDAH PRESENSI</span>';
+        popPesan.style.background='var(--orange-light)';
+        popPesan.style.color='var(--orange)';
+    } else {
+        const st=cekStatus(now);
+        const em=statusEmoji(st);
+
+        // Pilih audio
+        if(st.terlambat) putarRekaman('terlambat.wav');
+        else if(st.sesi==='Pulang') putarRekaman('pulang.wav');
+        else putarRekaman('datang_berhasil.wav');
+
+        tampilBadge(em.ikon,em.teks,em.bg,em.fg);
+        popPesan.innerHTML=`<span>${statusLabel(st,st.sabtu)}</span>`;
+        popPesan.style.background=em.bg;
+        popPesan.style.color=em.fg;
+
+        // Format data untuk GAS
+        const jamScan=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
+        const tgl=`${f2(now.getDate())}/${f2(now.getMonth()+1)}/${now.getFullYear()}`;
+
+        // Status teks sesuai kolom GSheet lama
+        let statusTeks='🟢 Tepat Waktu';
+        if(st.sabtu&&!st.terlambat) statusTeks='🟢 Sabtu Ontime';
+        else if(st.terlambat) statusTeks='🔴 Terlambat';
+        else if(st.sesi==='Pulang'&&st.pulangCepat) statusTeks='🟡 Pulang Cepat';
+        else if(st.sesi==='Pulang') statusTeks='🟢 Tepat Waktu';
+
+        kirimKeGAS({
+            qrCode:   id,
+            namaGuru: pg ? pg.nama : null,
+            jabatan:  pg ? pg.jabatan : null,
+            sesi:     st.sesi,
+            status:   statusTeks,
+            jamScan,
+            tanggal:  tgl,
+            jenisHari:jenisHariStr(now),
+        });
+
+        scanHistory[id]=nowMs;
+    }
+
+    input.value='';
+    setTimeout(resetUI,4000);
+});
+</script>
+</body>
+</html>
