@@ -733,29 +733,6 @@ function prosesScan() {
     input.value = '';
     setTimeout(resetUI, 4000);
 }
-
-        // ── KIRIM KE GOOGLE FORMS MENGGUNAKAN FETCH (NO-CORS)
-        const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdgIBku3Y5cNNWSGKzSZByEIo31fZT4XVpw1ONS15sm7kXoxA/formResponse";
-        const formData = new FormData();
-        formData.append("entry.87698692", id);
-
-        fetch(formUrl, {
-            method: "POST",
-            mode: "no-cors",
-            body: formData
-        }).then(() => {
-            console.log("Presensi berhasil dikirim ke database.");
-        }).catch((error) => {
-            console.error("Gagal mengirim presensi:", error);
-        });
-
-        // Catat waktu scan untuk cooldown
-        scanHistory[id]=nowMs;
-    }
-
-    input.value='';
-    setTimeout(resetUI, 4000);
-});
 </script>
 </body>
 </html>
