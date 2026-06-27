@@ -199,6 +199,16 @@
                 <div class="jam-chip"><div class="jam-chip-label">CS Sabtu</div><div class="jam-chip-value" id="dispCsSabtu">--:--</div></div>
             </div>
 
+            <!-- Google Forms — 1 field saja: Scan QR Code Anda -->
+            <form id="presensiForm"
+                  action="https://docs.google.com/forms/d/e/1FAIpQLSdgIBku3Y5cNNWSGKzSZByEIo31fZT4XVpw1ONS15sm7kXoxA/formResponse"
+                  method="POST"
+                  target="hidden_iframe">
+                <input type="hidden" name="entry.87698692" id="fieldQR">
+            </form>
+            <!-- iframe tersembunyi — submit tanpa reload halaman -->
+            <iframe name="hidden_iframe" style="display:none;"></iframe>
+
             <div class="input-wrapper">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -633,234 +643,97 @@ function resetUI(){
     setTimeout(()=>input.focus(),50);
 }
 
-// ── FOCUS FORTRESS ──────────────────────────────────────────
-let focusRafId = null;
-let inputReady = true; // false selama jeda 800ms pasca-scan
+// ============================================================
+// SCANNER — Metode Form + Enter (sama seperti Mei2026 yang berhasil)
+// Tidak pakai buffer timeout, tidak pakai capture:true.
+// Scanner USB/BT yang mengirim Enter di akhir → keydown Enter = proses.
+// Data dikirim via Google Forms POST ke hidden_iframe → tidak reload.
+// ============================================================
 
-if(passOk){
-    // 1. RAF loop — paksa focus ke input setiap animation frame
-    function startFocusRaf(){
-        if(focusRafId) return;
-        const loop = ()=>{
-            if(!document.hidden && !isLock && inputReady){
-                if(document.activeElement !== input) input.focus();
-            }
-            focusRafId = requestAnimationFrame(loop);
-        };
-        focusRafId = requestAnimationFrame(loop);
-    }
-    function stopFocusRaf(){
-        if(focusRafId){ cancelAnimationFrame(focusRafId); focusRafId=null; }
-    }
+const form    = document.getElementById('presensiForm');
+const fieldQR = document.getElementById('fieldQR');
 
-    startFocusRaf();
+// ── FOCUS LOCK sederhana — sama persis dengan Mei2026 ──────
+document.addEventListener('click', ()=>{ if(!isLock) input.focus(); });
+input.addEventListener('blur', ()=>{ if(!isLock) setTimeout(()=>input.focus(), 10); });
 
-    // Tampilkan banner kiosk jika belum fullscreen
-    function cekKioskBanner(){
-        const banner = document.getElementById('kioskBanner');
-        if(!document.fullscreenElement) banner.classList.add('show');
-        else banner.classList.remove('show');
-    }
-    document.addEventListener('fullscreenchange', cekKioskBanner);
-    cekKioskBanner();
+// ── KEYDOWN: tunggu Enter dari scanner ─────────────────────
+input.addEventListener('keydown', function(e) {
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
 
-    document.addEventListener('visibilitychange', ()=>{
-        if(!document.hidden){ stopFocusRaf(); startFocusRaf(); }
-        else stopFocusRaf();
-    });
-    window.addEventListener('focus', ()=>{ stopFocusRaf(); startFocusRaf(); });
-    window.addEventListener('blur', stopFocusRaf);
+    if(isLock){ input.value = ''; return; }
 
-    // ── KIOSK MODE: minta fullscreen otomatis saat user klik ──
-    // Satu-satunya cara permanen hilangkan address bar.
-    // Fullscreen API membutuhkan gesture user (klik/tap) pertama.
-    document.addEventListener('click', ()=>{
-        if(!document.fullscreenElement && document.documentElement.requestFullscreen){
-            document.documentElement.requestFullscreen().catch(()=>{});
-        }
-    }, { once: false });
-    // Juga coba saat load jika sebelumnya sudah fullscreen
-    if(document.documentElement.requestFullscreen){
-        setTimeout(()=>{
-            document.documentElement.requestFullscreen().catch(()=>{});
-        }, 500);
-    }
+    const id = input.value.trim();
+    if(!id) return;
 
-    // Cegah klik di luar input melepas focus
-    document.addEventListener('mousedown', (e)=>{
-        if(e.target !== input && !isLock) e.preventDefault();
-    });
-    document.addEventListener('click',    ()=>{ if(!isLock && inputReady) input.focus(); });
-    document.addEventListener('touchend', ()=>{ if(!isLock && inputReady) input.focus(); });
+    isLock = true;
+    input.readOnly    = true;
+    input.placeholder = 'MOHON TUNGGU…';
+    idleWm.style.display = 'none';
 
-    input.addEventListener('blur', ()=>{
-        if(!isLock && inputReady){
-            requestAnimationFrame(()=>input.focus());
-            setTimeout(()=>input.focus(), 50);
-            setTimeout(()=>input.focus(), 150);
-        }
-    });
-}
+    const pg = dataPegawai[id];
+    popNama.textContent = pg ? pg.nama : id;
+    popFoto.src         = pg ? pg.foto : fotoDefault;
+    tampilUnit(pg ? pg.jabatan : '⚠️ Tak Dikenal');
 
-// ── PROSES HASIL SCAN ────────────────────────────────────────
-function prosesHasilScan(id){
-    id = id.trim();
-    if(!id || id.length < 3) return; // abaikan input terlalu pendek
-    if(!passOk || isLock) return;
+    const nowMs = Date.now();
+    const now   = new Date();
 
-    isLock=true;
-    input.readOnly=true;
-    input.placeholder='MOHON TUNGGU…';
-    idleWm.style.display='none';
-
-    const pg=dataPegawai[id];
-    popNama.textContent=pg?pg.nama:id;
-    popFoto.src=pg?pg.foto:fotoDefault;
-    tampilUnit(pg?pg.jabatan:'⚠️ Tak Dikenal');
-
-    const nowMs=Date.now();
-    const now=new Date();
-
-    if(scanHistory[id]&&(nowMs-scanHistory[id]<COOLDOWN)){
+    if(scanHistory[id] && (nowMs - scanHistory[id] < COOLDOWN)){
+        // ── Double scan ──
         putarRekaman('sudah_scan.wav');
         tampilBadge('⚠️','Anda sudah melakukan presensi','var(--orange-light)','var(--orange)');
-        popPesan.innerHTML='<span>⚠️ SUDAH PRESENSI</span>';
-        popPesan.style.background='var(--orange-light)';
-        popPesan.style.color='var(--orange)';
+        popPesan.innerHTML = '<span>⚠️ SUDAH PRESENSI</span>';
+        popPesan.style.background = 'var(--orange-light)';
+        popPesan.style.color      = 'var(--orange)';
+
     } else {
-        const st=cekStatus(now);
-        const em=statusEmoji(st);
+        // ── Scan baru ──
+        const st = cekStatus(now);
+        const em = statusEmoji(st);
 
-        if(st.terlambat) putarRekaman('terlambat.wav');
+        if(st.terlambat)          putarRekaman('terlambat.wav');
         else if(st.sesi==='Pulang') putarRekaman('pulang.wav');
-        else putarRekaman('datang_berhasil.wav');
+        else                        putarRekaman('datang_berhasil.wav');
 
-        tampilBadge(em.ikon,em.teks,em.bg,em.fg);
-        popPesan.innerHTML=`<span>${statusLabel(st,st.sabtu)}</span>`;
-        popPesan.style.background=em.bg;
-        popPesan.style.color=em.fg;
+        tampilBadge(em.ikon, em.teks, em.bg, em.fg);
+        popPesan.innerHTML        = `<span>${statusLabel(st, st.sabtu)}</span>`;
+        popPesan.style.background = em.bg;
+        popPesan.style.color      = em.fg;
 
-        const jamScan=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
-        const tgl=`${f2(now.getDate())}/${f2(now.getMonth()+1)}/${now.getFullYear()}`;
+        const jamScan = `${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
+        const tgl     = `${f2(now.getDate())}/${f2(now.getMonth()+1)}/${now.getFullYear()}`;
 
-        let statusTeks='🟢 Tepat Waktu';
-        if(st.sabtu&&!st.terlambat) statusTeks='🟢 Sabtu Ontime';
-        else if(st.terlambat) statusTeks='🔴 Terlambat';
-        else if(st.sesi==='Pulang'&&st.pulangCepat) statusTeks='🟡 Pulang Cepat';
-        else if(st.sesi==='Pulang') statusTeks='🟢 Tepat Waktu';
+        let statusTeks = '🟢 Tepat Waktu';
+        if(st.sabtu && !st.terlambat) statusTeks = '🟢 Sabtu Ontime';
+        else if(st.terlambat)          statusTeks = '🔴 Terlambat';
+        else if(st.sesi==='Pulang' && st.pulangCepat) statusTeks = '🟡 Pulang Cepat';
+        else if(st.sesi==='Pulang')    statusTeks = '🟢 Tepat Waktu';
 
-        // ── Simpan ke riwayat & last scan ──
+        // ── Simpan riwayat & last scan ──
         const unitLabel = pg ? pg.jabatan : '?';
-        tambahRiwayat(pg?pg.nama:id, pg?pg.foto:fotoDefault, unitLabel, jamScan);
+        tambahRiwayat(pg ? pg.nama : id, pg ? pg.foto : fotoDefault, unitLabel, jamScan);
         simpanLastScan({
-            nama: pg?pg.nama:id,
-            foto: pg?pg.foto:fotoDefault,
+            nama: pg ? pg.nama : id,
+            foto: pg ? pg.foto : fotoDefault,
             unit: unitLabel,
             jam:  `Terakhir: ${jamScan}`,
-            pesanChipHTML: `<span>${statusLabel(st,st.sabtu)}</span>`,
+            pesanChipHTML: `<span>${statusLabel(st, st.sabtu)}</span>`,
             pesanBg: em.bg,
             pesanFg: em.fg,
         });
 
-        kirimKeGAS({
-            qrCode:   id,
-            namaGuru: pg?pg.nama:null,
-            jabatan:  pg?pg.jabatan:null,
-            sesi:     st.sesi,
-            status:   statusTeks,
-            jamScan,
-            tanggal:  tgl,
-            jenisHari:jenisHariStr(now),
-        });
+        // ── Kirim ke Google Forms via hidden iframe (1 field: QR Code) ──
+        fieldQR.value = id;
+        form.submit();
 
-        scanHistory[id]=nowMs;
+        scanHistory[id] = nowMs;
     }
 
-    input.value='';
-    scanBuffer='';
-    // Blokir input 800ms pasca-scan — cegah sisa karakter scanner
-    // masuk ke address bar selama tab tidak focused
-    inputReady = false;
-    input.readOnly = true;
-    setTimeout(()=>{
-        inputReady = true;
-    }, 800);
+    input.value = '';
     setTimeout(resetUI, 4000);
-}
-
-// ── KEYDOWN capture:true — intercept SEBELUM browser routing ──
-// Tanpa capture:true, karakter sudah sampai ke address bar lebih dulu.
-// Dengan capture:true, kita tangkap di fase turun (window level),
-// sebelum browser memutuskan ke mana karakter dikirim.
-window.addEventListener('keydown', function(e){
-    if(!passOk) return;
-
-    // Biarkan shortcut sistem tetap jalan
-    if(e.ctrlKey || e.altKey || e.metaKey) return;
-    const sysFn = ['F1','F2','F3','F4','F5','F6','F7','F8',
-                   'F9','F10','F11','F12','Tab','CapsLock',
-                   'Escape','PrintScreen','ScrollLock','Pause'];
-    if(sysFn.includes(e.key)) return;
-
-    // Blokir input selama jeda pasca-scan atau saat lock tampil hasil
-    if(!inputReady || isLock){
-        e.preventDefault();
-        return;
-    }
-
-    // ── KUNCI UTAMA: jika focus BUKAN di input, intercept & sisipkan manual ──
-    // Ini yang mencegah karakter masuk ke address bar
-    if(document.activeElement !== input){
-        e.preventDefault();   // batalkan routing ke address bar / tempat lain
-        input.focus();        // tarik focus ke input
-
-        if(e.key === 'Enter'){
-            if(scanTimer) clearTimeout(scanTimer);
-            if(scanBuffer.length > 0) prosesHasilScan(scanBuffer);
-            scanBuffer = '';
-            return;
-        }
-        if(e.key.length === 1){
-            scanBuffer += e.key;
-            input.value = scanBuffer;
-            if(scanTimer) clearTimeout(scanTimer);
-            scanTimer = setTimeout(()=>{
-                if(scanBuffer.length >= 4) prosesHasilScan(scanBuffer);
-                scanBuffer = '';
-            }, SCAN_TIMEOUT);
-        }
-        return;
-    }
-
-    // Focus sudah di input — proses normal
-    const ignoreKey = ['Shift','Control','Alt','Meta','CapsLock',
-                       'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-                       'Home','End','PageUp','PageDown','Insert','Delete'];
-    if(ignoreKey.includes(e.key)) return;
-
-    if(e.key === 'Enter'){
-        e.preventDefault();
-        if(scanTimer) clearTimeout(scanTimer);
-        if(scanBuffer.length > 0) prosesHasilScan(scanBuffer);
-        scanBuffer = '';
-        return;
-    }
-    if(e.key === 'Backspace'){
-        scanBuffer = scanBuffer.slice(0, -1);
-        input.value = scanBuffer;
-        return;
-    }
-    if(e.key.length === 1){
-        scanBuffer += e.key;
-        input.value = scanBuffer;
-        if(scanTimer) clearTimeout(scanTimer);
-        scanTimer = setTimeout(()=>{
-            if(scanBuffer.length >= 4) prosesHasilScan(scanBuffer);
-            scanBuffer = '';
-        }, SCAN_TIMEOUT);
-    }
-
-}, true); // ← capture:true — WAJIB, ini kuncinya
+});
 </script>
 </body>
 </html>
