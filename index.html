@@ -612,47 +612,49 @@ function resetUI(){
     setTimeout(()=>input.focus(),50);
 }
 
-// ── FOCUS LOCK — kursor selalu kembali ke input ──────────────
-function kunciKursor(){
-    if(!passOk||isLock) return;
-    input.focus();
-}
+// ── FOCUS FORTRESS ──────────────────────────────────────────
+let focusRafId = null;
+let inputReady = true; // false selama jeda 800ms pasca-scan
 
 if(passOk){
-    // Kunci kursor setiap klik di mana saja
-    document.addEventListener('click', kunciKursor);
-    document.addEventListener('touchend', kunciKursor);
+    // 1. RAF loop — paksa focus ke input setiap animation frame
+    function startFocusRaf(){
+        if(focusRafId) return;
+        const loop = ()=>{
+            if(!document.hidden && !isLock && inputReady){
+                if(document.activeElement !== input) input.focus();
+            }
+            focusRafId = requestAnimationFrame(loop);
+        };
+        focusRafId = requestAnimationFrame(loop);
+    }
+    function stopFocusRaf(){
+        if(focusRafId){ cancelAnimationFrame(focusRafId); focusRafId=null; }
+    }
 
-    // Kunci kursor saat blur dengan retry agresif
-    input.addEventListener('blur', ()=>{
-        if(!isLock){
-            setTimeout(kunciKursor, 10);
-            setTimeout(kunciKursor, 50);
-            setTimeout(kunciKursor, 150);
-        }
-    });
+    startFocusRaf();
 
-    // Kunci kursor saat halaman kembali aktif (alt-tab dll)
     document.addEventListener('visibilitychange', ()=>{
-        if(!document.hidden) setTimeout(kunciKursor, 200);
+        if(!document.hidden){ stopFocusRaf(); startFocusRaf(); }
+        else stopFocusRaf();
     });
-    window.addEventListener('focus', ()=>setTimeout(kunciKursor, 100));
+    window.addEventListener('focus', ()=>{ stopFocusRaf(); startFocusRaf(); });
+    window.addEventListener('blur', stopFocusRaf);
 
-    // ── FIX BUG: focus kabur ke address bar ──────────────────
-    // Scanner kadang kirim karakter pertama sebelum halaman focused
-    // Intercept mousedown agar klik apapun di halaman tidak melepas focus dari input
+    // Cegah klik di luar input melepas focus
     document.addEventListener('mousedown', (e)=>{
-        if(e.target !== input && !isLock){
-            e.preventDefault(); // cegah klik pindahkan focus
+        if(e.target !== input && !isLock) e.preventDefault();
+    });
+    document.addEventListener('click',    ()=>{ if(!isLock && inputReady) input.focus(); });
+    document.addEventListener('touchend', ()=>{ if(!isLock && inputReady) input.focus(); });
+
+    input.addEventListener('blur', ()=>{
+        if(!isLock && inputReady){
+            requestAnimationFrame(()=>input.focus());
+            setTimeout(()=>input.focus(), 50);
+            setTimeout(()=>input.focus(), 150);
         }
     });
-
-    // Periodic check setiap 300ms — jika focus kabur, kembalikan
-    setInterval(()=>{
-        if(!isLock && document.activeElement !== input && !document.hidden){
-            input.focus();
-        }
-    }, 300);
 }
 
 // ── PROSES HASIL SCAN ────────────────────────────────────────
@@ -731,50 +733,89 @@ function prosesHasilScan(id){
 
     input.value='';
     scanBuffer='';
-    setTimeout(resetUI,4000);
+    // Blokir input 800ms pasca-scan — cegah sisa karakter scanner
+    // masuk ke address bar selama tab tidak focused
+    inputReady = false;
+    input.readOnly = true;
+    setTimeout(()=>{
+        inputReady = true;
+    }, 800);
+    setTimeout(resetUI, 4000);
 }
 
-// ── LISTENER KEYBOARD — tangkap semua karakter di mana saja ──
-// Ini memastikan scan tetap berjalan walau kursor sempat kabur
-document.addEventListener('keydown', function(e){
-    if(!passOk || isLock) return;
+// ── KEYDOWN capture:true — intercept SEBELUM browser routing ──
+// Tanpa capture:true, karakter sudah sampai ke address bar lebih dulu.
+// Dengan capture:true, kita tangkap di fase turun (window level),
+// sebelum browser memutuskan ke mana karakter dikirim.
+window.addEventListener('keydown', function(e){
+    if(!passOk) return;
 
-    // Abaikan modifier keys, function keys, navigation keys
-    const ignore=['Shift','Control','Alt','Meta','CapsLock','Tab',
-                  'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-                  'Home','End','PageUp','PageDown','Insert','Delete',
-                  'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
-    if(ignore.includes(e.key)) return;
+    // Biarkan shortcut sistem tetap jalan
+    if(e.ctrlKey || e.altKey || e.metaKey) return;
+    const sysFn = ['F1','F2','F3','F4','F5','F6','F7','F8',
+                   'F9','F10','F11','F12','Tab','CapsLock',
+                   'Escape','PrintScreen','ScrollLock','Pause'];
+    if(sysFn.includes(e.key)) return;
 
-    if(e.key==='Enter'){
-        // Enter → langsung proses buffer
+    // Blokir input selama jeda pasca-scan atau saat lock tampil hasil
+    if(!inputReady || isLock){
+        e.preventDefault();
+        return;
+    }
+
+    // ── KUNCI UTAMA: jika focus BUKAN di input, intercept & sisipkan manual ──
+    // Ini yang mencegah karakter masuk ke address bar
+    if(document.activeElement !== input){
+        e.preventDefault();   // batalkan routing ke address bar / tempat lain
+        input.focus();        // tarik focus ke input
+
+        if(e.key === 'Enter'){
+            if(scanTimer) clearTimeout(scanTimer);
+            if(scanBuffer.length > 0) prosesHasilScan(scanBuffer);
+            scanBuffer = '';
+            return;
+        }
+        if(e.key.length === 1){
+            scanBuffer += e.key;
+            input.value = scanBuffer;
+            if(scanTimer) clearTimeout(scanTimer);
+            scanTimer = setTimeout(()=>{
+                if(scanBuffer.length >= 4) prosesHasilScan(scanBuffer);
+                scanBuffer = '';
+            }, SCAN_TIMEOUT);
+        }
+        return;
+    }
+
+    // Focus sudah di input — proses normal
+    const ignoreKey = ['Shift','Control','Alt','Meta','CapsLock',
+                       'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+                       'Home','End','PageUp','PageDown','Insert','Delete'];
+    if(ignoreKey.includes(e.key)) return;
+
+    if(e.key === 'Enter'){
         e.preventDefault();
         if(scanTimer) clearTimeout(scanTimer);
-        if(scanBuffer.length>0) prosesHasilScan(scanBuffer);
-        scanBuffer='';
+        if(scanBuffer.length > 0) prosesHasilScan(scanBuffer);
+        scanBuffer = '';
         return;
     }
-
-    if(e.key==='Backspace'){
-        scanBuffer=scanBuffer.slice(0,-1);
-        input.value=scanBuffer;
+    if(e.key === 'Backspace'){
+        scanBuffer = scanBuffer.slice(0, -1);
+        input.value = scanBuffer;
         return;
     }
-
-    // Karakter normal — tambah ke buffer
-    if(e.key.length===1){
-        scanBuffer+=e.key;
-        input.value=scanBuffer;
-
-        // Reset timer setiap karakter masuk
+    if(e.key.length === 1){
+        scanBuffer += e.key;
+        input.value = scanBuffer;
         if(scanTimer) clearTimeout(scanTimer);
-        scanTimer=setTimeout(()=>{
-            // Setelah SCAN_TIMEOUT ms tanpa karakter baru → proses
-            if(scanBuffer.length>=4) prosesHasilScan(scanBuffer);
-            scanBuffer='';
+        scanTimer = setTimeout(()=>{
+            if(scanBuffer.length >= 4) prosesHasilScan(scanBuffer);
+            scanBuffer = '';
         }, SCAN_TIMEOUT);
     }
-});
+
+}, true); // ← capture:true — WAJIB, ini kuncinya
 </script>
 </body>
 </html>
