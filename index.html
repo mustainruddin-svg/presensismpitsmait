@@ -627,68 +627,112 @@ input.addEventListener('blur', ()=>{ if(!isLock) setTimeout(()=>input.focus(), 1
 
 
 // ============================================================
-// SCANNER 
+// SCANNER (AUTO-SUBMIT TANPA ENTER)
 // ============================================================
-input.addEventListener('keydown', function(e){
-    if(e.key !== 'Enter') return;
-    e.preventDefault();
+let typingTimer;
+const doneTypingInterval = 200; // Jeda 200 milidetik setelah alat berhenti memindai
 
-    // Tolak jika sedang lock
-    if(isLock){ input.value=''; return; }
+// 1. Deteksi otomatis setiap karakter yang masuk dari scanner
+input.addEventListener('input', function(e) {
+    clearTimeout(typingTimer);
+    
+    // Abaikan jika input kosong atau sistem sedang memproses (terkunci)
+    if(!input.value.trim() || isLock) return;
 
+    // Jika tidak ada input baru selama 200ms, jalankan fungsi prosesScan
+    typingTimer = setTimeout(prosesScan, doneTypingInterval);
+});
+
+// 2. Tetap sediakan antisipasi tombol Enter (jika diketik manual melalui keyboard)
+input.addEventListener('keydown', function(e) {
+    if(e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(typingTimer); // Batalkan timer otomatis agar tidak terkirim dua kali
+        if(!isLock && input.value.trim() !== '') {
+            prosesScan();
+        }
+    }
+});
+
+// 3. Fungsi Utama Pemrosesan Presensi
+function prosesScan() {
     const id = input.value.trim();
     if(!id) return;
 
-    // LOCK — cegah scan apapun masuk
-    isLock=true;
-    input.readOnly=true;
-    input.placeholder='MOHON TUNGGU…';
-    idleWm.style.display='none';
+    // LOCK — cegah scan lain masuk beruntun saat memproses
+    isLock = true;
+    input.readOnly = true;
+    input.placeholder = 'MOHON TUNGGU…';
+    idleWm.style.display = 'none';
 
-    const pg=dataPegawai[id];
-    popNama.textContent=pg ? pg.nama : id;
-    popFoto.src=pg ? pg.foto : fotoDefault;
+    const pg = dataPegawai[id];
+    popNama.textContent = pg ? pg.nama : id;
+    popFoto.src = pg ? pg.foto : fotoDefault;
     tampilUnit(pg ? pg.jabatan : '⚠️ Tak Dikenal');
 
-    const nowMs=Date.now();
-    const now=new Date();
+    const nowMs = Date.now();
+    const now = new Date();
 
-    if(scanHistory[id] && (nowMs-scanHistory[id]<COOLDOWN)){
+    if(scanHistory[id] && (nowMs - scanHistory[id] < COOLDOWN)) {
         // ── DOUBLE SCAN — tampilkan peringatan, TIDAK kirim ke form
         putarRekaman('sudah_scan.wav');
-        tampilBadge('⚠️','Anda sudah melakukan presensi','var(--orange-light)','var(--orange)');
-        popPesan.innerHTML='<span>⚠️ SUDAH PRESENSI</span>';
-        popPesan.style.background='var(--orange-light)';
-        popPesan.style.color='var(--orange)';
+        tampilBadge('⚠️', 'Anda sudah melakukan presensi', 'var(--orange-light)', 'var(--orange)');
+        popPesan.innerHTML = '<span>⚠️ SUDAH PRESENSI</span>';
+        popPesan.style.background = 'var(--orange-light)';
+        popPesan.style.color = 'var(--orange)';
 
     } else {
         // ── SCAN VALID
-        const st=cekStatus(now);
-        const em=statusEmoji(st);
+        const st = cekStatus(now);
+        const em = statusEmoji(st);
 
-        if(st.terlambat)           putarRekaman('terlambat.wav');
+        if(st.terlambat)            putarRekaman('terlambat.wav');
         else if(st.sesi==='Pulang') putarRekaman('pulang.wav');
         else                        putarRekaman('datang_berhasil.wav');
 
-        tampilBadge(em.ikon,em.teks,em.bg,em.fg);
-        popPesan.innerHTML=`<span>${statusLabel(st)}</span>`;
-        popPesan.style.background=em.bg;
-        popPesan.style.color=em.fg;
+        tampilBadge(em.ikon, em.teks, em.bg, em.fg);
+        popPesan.innerHTML = `<span>${statusLabel(st)}</span>`;
+        popPesan.style.background = em.bg;
+        popPesan.style.color = em.fg;
 
-        const jamScan=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
+        const jamScan = `${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
 
         // Simpan riwayat & last scan
-        const unitLabel=pg ? pg.jabatan : '?';
-        tambahRiwayat(pg?pg.nama:id, pg?pg.foto:fotoDefault, unitLabel, jamScan);
-        lastScan={
-            nama: pg?pg.nama:id,
-            foto: pg?pg.foto:fotoDefault,
+        const unitLabel = pg ? pg.jabatan : '?';
+        tambahRiwayat(pg ? pg.nama : id, pg ? pg.foto : fotoDefault, unitLabel, jamScan);
+        lastScan = {
+            nama: pg ? pg.nama : id,
+            foto: pg ? pg.foto : fotoDefault,
             unit: unitLabel,
             jam:  `Terakhir: ${jamScan}`,
             pesanChipHTML: `<span>${statusLabel(st)}</span>`,
             pesanBg: em.bg,
             pesanFg: em.fg,
         };
+
+        // ── KIRIM KE GOOGLE FORMS MENGGUNAKAN FETCH
+        const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdgIBku3Y5cNNWSGKzSZByEIo31fZT4XVpw1ONS15sm7kXoxA/formResponse";
+        const formData = new FormData();
+        formData.append("entry.87698692", id);
+
+        fetch(formUrl, {
+            method: "POST",
+            mode: "no-cors",
+            body: formData
+        }).then(() => {
+            console.log("Presensi berhasil dikirim ke database.");
+        }).catch((error) => {
+            console.error("Gagal mengirim presensi:", error);
+        });
+
+        // Catat waktu scan untuk cooldown agar tidak double scan
+        scanHistory[id] = nowMs;
+    }
+
+    // Bersihkan input dan atur ulang UI setelah 4 detik
+    input.value = '';
+    setTimeout(resetUI, 4000);
+}
 
         // ── KIRIM KE GOOGLE FORMS MENGGUNAKAN FETCH (NO-CORS)
         const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdgIBku3Y5cNNWSGKzSZByEIo31fZT4XVpw1ONS15sm7kXoxA/formResponse";
