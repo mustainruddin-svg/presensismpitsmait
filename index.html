@@ -266,100 +266,86 @@
 
 <script>
 // ============================================================
-// KONFIGURASI — edit bagian ini saja
+// KONFIGURASI
 // ============================================================
-const PASS_VALID = "112233";   // ganti jika perlu
-
-// Setelah deploy GAS, paste Web App URL di sini:
-const GAS_URL = "https://script.google.com/macros/s/AKfycbypkJDuEYdYrNGT5XwwGXw2z0WGoqrMrKESWasiUBiqTMgvFdFTGPlP5oE8NWzZX5k/exec";
-
-// Fallback jam jika GAS tidak terjangkau
+const PASS_VALID = "112233";
+const GAS_URL    = "https://script.google.com/macros/s/AKfycbypkJDuEYdYrNGT5XwwGXw2z0WGoqrMrKESWasiUBiqTMgvFdFTGPlP5oE8NWzZX5k/exec";
 const JAM_FALLBACK = {
     jamMasuk:"08:00", jamPulang:"14:00", jamSabtu:"08:00",
-    jamPiket:"08:00", csDatang:"06:45", csPulang:"15:00", csSabtu:"07:15"
+    csDatang:"06:45", csPulang:"15:00", csSabtu:"07:15"
 };
 
 // ============================================================
 // CEK AKSES
 // ============================================================
 const passOk = new URLSearchParams(window.location.search).get('pass') === PASS_VALID;
-if (!passOk) {
+if(!passOk){
     document.getElementById('accessBlock').classList.add('show');
     document.getElementById('loadingConfig').classList.remove('show');
     document.querySelectorAll('body > *:not(#accessBlock):not(#loadingConfig)')
-        .forEach(el => el.style.visibility = 'hidden');
+        .forEach(el => el.style.visibility='hidden');
 }
 
 // ============================================================
-// JAM CONFIG
+// JAM CONFIG dari GAS
 // ============================================================
 let JAM = {};
 
-function parseHHMM(str) {
-    if (!str) return null;
+function parseHHMM(str){
+    if(!str) return null;
     const m = str.toString().match(/(\d{1,2}):(\d{2})/);
-    if (!m) return null;
-    return { h: parseInt(m[1]), m: parseInt(m[2]) };
+    if(!m) return null;
+    return {h:parseInt(m[1]), m:parseInt(m[2])};
 }
 
-function toSec(h, m) { return h * 3600 + m * 60; }
-
-function applyJamObj(obj) {
-    // obj: { jamMasuk:"08:00", jamPulang:"14:00", ... }
-    for (const [key, val] of Object.entries(obj)) {
+function applyJamObj(obj){
+    for(const [key,val] of Object.entries(obj)){
         const p = parseHHMM(val);
-        if (p) { JAM[key+'H'] = p.h; JAM[key+'M'] = p.m; }
+        if(p){ JAM[key+'H']=p.h; JAM[key+'M']=p.m; }
     }
 }
 
-function updateJamDisplay() {
-    const f = (h,m) => `${String(h||0).padStart(2,'0')}:${String(m||0).padStart(2,'0')}`;
-    document.getElementById('dispJamMasuk').textContent  = f(JAM.jamMasukH,  JAM.jamMasukM);
-    document.getElementById('dispJamPulang').textContent = f(JAM.jamPulangH, JAM.jamPulangM);
-    document.getElementById('dispJamSabtu').textContent  = f(JAM.jamSabtuH,  JAM.jamSabtuM);
-    document.getElementById('dispCsDatang').textContent  = f(JAM.csDatangH,  JAM.csDatangM);
-    document.getElementById('dispCsPulang').textContent  = f(JAM.csPulangH,  JAM.csPulangM);
-    document.getElementById('dispCsSabtu').textContent   = f(JAM.csSabtuH,   JAM.csSabtuM);
+function updateJamDisplay(){
+    const f=(h,m)=>`${String(h||0).padStart(2,'0')}:${String(m||0).padStart(2,'0')}`;
+    document.getElementById('dispJamMasuk').textContent  = f(JAM.jamMasukH, JAM.jamMasukM);
+    document.getElementById('dispJamPulang').textContent = f(JAM.jamPulangH,JAM.jamPulangM);
+    document.getElementById('dispJamSabtu').textContent  = f(JAM.jamSabtuH, JAM.jamSabtuM);
+    document.getElementById('dispCsDatang').textContent  = f(JAM.csDatangH, JAM.csDatangM);
+    document.getElementById('dispCsPulang').textContent  = f(JAM.csPulangH, JAM.csPulangM);
+    document.getElementById('dispCsSabtu').textContent   = f(JAM.csSabtuH,  JAM.csSabtuM);
 }
 
-async function fetchJamConfig() {
+async function fetchJamConfig(){
     const pill     = document.getElementById('configPill');
     const pillText = document.getElementById('configPillText');
     pill.className = 'config-pill load';
     pillText.textContent = 'Menghubungi server…';
-
-    try {
-        // GAS doGet — ambil config jam
-        const res  = await fetch(GAS_URL, { cache: 'no-store' });
+    try{
+        const res  = await fetch(GAS_URL, {cache:'no-store'});
         const data = await res.json();
-
-        if (data.ok && data.jam) {
+        if(data.ok && data.jam){
             applyJamObj(data.jam);
             updateJamDisplay();
             const now = new Date();
             const ts  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
             pill.className = 'config-pill ok';
             pillText.textContent = `Jam diperbarui dari GSheet · ${ts}`;
-        } else {
-            throw new Error(data.error || 'Response tidak valid');
-        }
-    } catch(e) {
+        } else throw new Error('Response tidak valid');
+    } catch(e){
         applyJamObj(JAM_FALLBACK);
         updateJamDisplay();
         pill.className = 'config-pill err';
         pillText.textContent = 'GAS tidak terjangkau — pakai jam default';
-        console.warn('fetchJamConfig:', e.message);
     } finally {
         document.getElementById('loadingConfig').classList.remove('show');
     }
 }
 
-// Init
 applyJamObj(JAM_FALLBACK);
 updateJamDisplay();
-if (passOk) {
+if(passOk){
     fetchJamConfig();
-    setInterval(fetchJamConfig, 10 * 60 * 1000);
+    setInterval(fetchJamConfig, 10*60*1000);
 } else {
     document.getElementById('loadingConfig').classList.remove('show');
 }
@@ -419,43 +405,78 @@ const fotoDefault = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profil
 // ============================================================
 // JAM & COUNTDOWN
 // ============================================================
-function f2(n){return n<10?'0'+n:''+n;}
-function isSabtu(d){return d.getDay()===6;}
+function f2(n){ return n<10?'0'+n:''+n; }
+function isSabtu(d){ return d.getDay()===6; }
 
 function updateWaktu(){
     const now=new Date();
-    document.getElementById('displayClock').textContent=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
-    const hari=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-    const bulan=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    document.getElementById('displayDate').textContent=`${hari[now.getDay()]}, ${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}`;
+    document.getElementById('displayClock').textContent=
+        `${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
+    const hari  =['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    const bulan =['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    document.getElementById('displayDate').textContent=
+        `${hari[now.getDay()]}, ${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}`;
 
     const lbl=document.getElementById('statusLabel');
-    const cd=document.getElementById('displayCountdown');
+    const cd =document.getElementById('displayCountdown');
     const card=document.getElementById('infoCard');
     card.className='countdown-box';
-
     const h=now.getHours(),m=now.getMinutes(),s=now.getSeconds();
     const nowSec=h*3600+m*60+s;
-
     const sec=(hh,mm)=>hh*3600+mm*60;
 
     if(isSabtu(now)){
         const batSec=sec(JAM.jamSabtuH||8,JAM.jamSabtuM||0);
-        const csSec=sec(JAM.csSabtuH||7,JAM.csSabtuM||15);
-        if(nowSec<csSec){const sisa=csSec-nowSec;lbl.textContent=`CS Sabtu (${f2(JAM.csSabtuH||7)}:${f2(JAM.csSabtuM||15)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-sabtu');}
-        else if(nowSec<batSec){const sisa=batSec-nowSec;lbl.textContent=`Batas Sabtu (${f2(JAM.jamSabtuH||8)}:${f2(JAM.jamSabtuM||0)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-normal');}
-        else{lbl.textContent='Sabtu – Terlambat';cd.textContent='TERLAMBAT';card.classList.add('state-telat');}
+        const csSec =sec(JAM.csSabtuH||7, JAM.csSabtuM||15);
+        if(nowSec<csSec){
+            const sisa=csSec-nowSec;
+            lbl.textContent=`CS Sabtu (${f2(JAM.csSabtuH||7)}:${f2(JAM.csSabtuM||15)})`;
+            cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;
+            card.classList.add('state-sabtu');
+        } else if(nowSec<batSec){
+            const sisa=batSec-nowSec;
+            lbl.textContent=`Batas Sabtu (${f2(JAM.jamSabtuH||8)}:${f2(JAM.jamSabtuM||0)})`;
+            cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;
+            card.classList.add('state-normal');
+        } else {
+            lbl.textContent='Sabtu – Terlambat';
+            cd.textContent='TERLAMBAT';
+            card.classList.add('state-telat');
+        }
     } else {
-        const masukSec=sec(JAM.jamMasukH||8,JAM.jamMasukM||0);
+        const masukSec =sec(JAM.jamMasukH||8, JAM.jamMasukM||0);
         const pulangSec=sec(JAM.jamPulangH||14,JAM.jamPulangM||0);
-        const csDataSec=sec(JAM.csDatangH||6,JAM.csDatangM||45);
-        const csPulSec=sec(JAM.csPulangH||15,JAM.csPulangM||0);
-        if(nowSec<csDataSec){const sisa=csDataSec-nowSec;lbl.textContent=`CS Datang (${f2(JAM.csDatangH||6)}:${f2(JAM.csDatangM||45)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-piket');}
-        else if(nowSec<masukSec){const sisa=masukSec-nowSec;lbl.textContent=`Batas Masuk (${f2(JAM.jamMasukH||8)}:${f2(JAM.jamMasukM||0)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-normal');}
-        else if(h<12){lbl.textContent='Batas Kedatangan';cd.textContent='TERLAMBAT';card.classList.add('state-telat');}
-        else if(nowSec<pulangSec){const sisa=pulangSec-nowSec;lbl.textContent=`Menuju Pulang (${f2(JAM.jamPulangH||14)}:${f2(JAM.jamPulangM||0)})`;cd.textContent=`${Math.floor(sisa/3600)}j : ${f2(Math.floor((sisa%3600)/60))}m`;card.classList.add('state-pulang');}
-        else if(nowSec<csPulSec){const sisa=csPulSec-nowSec;lbl.textContent=`CS Pulang (${f2(JAM.csPulangH||15)}:${f2(JAM.csPulangM||0)})`;cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;card.classList.add('state-pulang');}
-        else{lbl.textContent='Waktu Mengajar Selesai';cd.textContent='MODE PULANG';card.classList.add('state-normal');}
+        const csDataSec=sec(JAM.csDatangH||6, JAM.csDatangM||45);
+        const csPulSec =sec(JAM.csPulangH||15,JAM.csPulangM||0);
+        if(nowSec<csDataSec){
+            const sisa=csDataSec-nowSec;
+            lbl.textContent=`CS Datang (${f2(JAM.csDatangH||6)}:${f2(JAM.csDatangM||45)})`;
+            cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;
+            card.classList.add('state-piket');
+        } else if(nowSec<masukSec){
+            const sisa=masukSec-nowSec;
+            lbl.textContent=`Batas Masuk (${f2(JAM.jamMasukH||8)}:${f2(JAM.jamMasukM||0)})`;
+            cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;
+            card.classList.add('state-normal');
+        } else if(h<12){
+            lbl.textContent='Batas Kedatangan';
+            cd.textContent='TERLAMBAT';
+            card.classList.add('state-telat');
+        } else if(nowSec<pulangSec){
+            const sisa=pulangSec-nowSec;
+            lbl.textContent=`Menuju Pulang (${f2(JAM.jamPulangH||14)}:${f2(JAM.jamPulangM||0)})`;
+            cd.textContent=`${Math.floor(sisa/3600)}j : ${f2(Math.floor((sisa%3600)/60))}m`;
+            card.classList.add('state-pulang');
+        } else if(nowSec<csPulSec){
+            const sisa=csPulSec-nowSec;
+            lbl.textContent=`CS Pulang (${f2(JAM.csPulangH||15)}:${f2(JAM.csPulangM||0)})`;
+            cd.textContent=`${f2(Math.floor(sisa/60))}m : ${f2(sisa%60)}d`;
+            card.classList.add('state-pulang');
+        } else {
+            lbl.textContent='Waktu Mengajar Selesai';
+            cd.textContent='MODE PULANG';
+            card.classList.add('state-normal');
+        }
     }
 }
 setInterval(updateWaktu,1000);
@@ -465,103 +486,61 @@ updateWaktu();
 // STATUS SCAN
 // ============================================================
 function cekStatus(now){
-    const h=now.getHours(),m=now.getMinutes();
+    const h=now.getHours(), m=now.getMinutes();
     const nowMin=h*60+m;
     if(isSabtu(now)){
         const bat=(JAM.jamSabtuH||8)*60+(JAM.jamSabtuM||0);
-        return{sesi:'Datang',terlambat:nowMin>bat,pulangCepat:false,sabtu:true};
+        return {sesi:'Datang', terlambat:nowMin>bat, pulangCepat:false, sabtu:true};
     }
-    const masuk=(JAM.jamMasukH||8)*60+(JAM.jamMasukM||0);
+    const masuk =(JAM.jamMasukH||8)*60+(JAM.jamMasukM||0);
     const pulang=(JAM.jamPulangH||14)*60+(JAM.jamPulangM||0);
-    if(h<12) return{sesi:'Datang',terlambat:nowMin>masuk,pulangCepat:false,sabtu:false};
-    return{sesi:'Pulang',terlambat:false,pulangCepat:nowMin<pulang,sabtu:false};
+    if(h<12) return {sesi:'Datang', terlambat:nowMin>masuk, pulangCepat:false, sabtu:false};
+    return {sesi:'Pulang', terlambat:false, pulangCepat:nowMin<pulang, sabtu:false};
 }
 
-function statusLabel(st,sabtu){
-    if(sabtu&&!st.terlambat) return'🟢 Sabtu Ontime';
-    if(st.terlambat) return'🔴 Terlambat';
-    if(st.sesi==='Pulang'&&st.pulangCepat) return'🟡 Pulang Cepat';
-    if(st.sesi==='Pulang') return'🔵 Pulang Berhasil';
-    return'🟢 Tepat Waktu';
+function statusLabel(st){
+    if(st.sabtu&&!st.terlambat) return '🟢 Sabtu Ontime';
+    if(st.terlambat)             return '🔴 Terlambat';
+    if(st.sesi==='Pulang'&&st.pulangCepat) return '🟡 Pulang Cepat';
+    if(st.sesi==='Pulang')       return '🔵 Pulang Berhasil';
+    return '🟢 Tepat Waktu';
 }
 
 function statusEmoji(st){
-    if(st.sabtu&&!st.terlambat) return{ikon:'✅',teks:'Sabtu – Hadir Tepat Waktu',bg:'var(--teal-light)',fg:'var(--teal)'};
-    if(st.terlambat) return{ikon:'🕐',teks:'Datang – Terlambat',bg:'var(--orange-light)',fg:'var(--orange)'};
-    if(st.sesi==='Pulang'&&st.pulangCepat) return{ikon:'🌤️',teks:'Pulang – Lebih Awal',bg:'var(--gold-light)',fg:'var(--gold)'};
-    if(st.sesi==='Pulang') return{ikon:'🌙',teks:'Pulang – Berhasil',bg:'var(--blue-light)',fg:'var(--blue)'};
-    return{ikon:'✅',teks:'Datang – Berhasil dicatat',bg:'var(--green-light)',fg:'var(--green)'};
+    if(st.sabtu&&!st.terlambat) return {ikon:'✅',teks:'Sabtu – Hadir Tepat Waktu',bg:'var(--teal-light)',fg:'var(--teal)'};
+    if(st.terlambat)             return {ikon:'🕐',teks:'Datang – Terlambat',bg:'var(--orange-light)',fg:'var(--orange)'};
+    if(st.sesi==='Pulang'&&st.pulangCepat) return {ikon:'🌤️',teks:'Pulang – Lebih Awal',bg:'var(--gold-light)',fg:'var(--gold)'};
+    if(st.sesi==='Pulang')       return {ikon:'🌙',teks:'Pulang – Berhasil',bg:'var(--blue-light)',fg:'var(--blue)'};
+    return {ikon:'✅',teks:'Datang – Berhasil dicatat',bg:'var(--green-light)',fg:'var(--green)'};
 }
 
-// ============================================================
-// KIRIM DATA KE GAS
-// ============================================================
 function jenisHariStr(now){
     const d=now.getDay();
-    if(d===0) return'Minggu';
-    if(d===6) return'Sabtu';
-    return'Hari Kerja';
-}
-
-async function kirimKeGAS(payload){
-    // GAS tidak support CORS preflight dari browser.
-    // Solusi: kirim via GET no-cors dengan query string.
-    // GAS doGet baca e.parameter — tidak perlu preflight.
-    try{
-        const qs = new URLSearchParams({
-            action:    'absen',
-            qrCode:    payload.qrCode    || '',
-            namaGuru:  payload.namaGuru  || '',
-            jabatan:   payload.jabatan   || '',
-            sesi:      payload.sesi      || '',
-            status:    payload.status    || '',
-            jamScan:   payload.jamScan   || '',
-            tanggal:   payload.tanggal   || '',
-            jenisHari: payload.jenisHari || '',
-        }).toString();
-        await fetch(GAS_URL + '?' + qs, {
-            method: 'GET',
-            mode:   'no-cors',
-            cache:  'no-store',
-        });
-    }catch(e){
-        console.warn('GAS kirim gagal:', e.message);
-    }
+    if(d===0) return 'Minggu';
+    if(d===6) return 'Sabtu';
+    return 'Hari Kerja';
 }
 
 // ============================================================
-// SCANNER — Buffer Mode (kompatibel scanner USB/BT tanpa Enter)
+// RIWAYAT 5 SCAN TERAKHIR
 // ============================================================
-const input=document.getElementById('qrInput');
-const badge=document.getElementById('statusPesan');
-const popFoto=document.getElementById('popFoto');
-const popNama=document.getElementById('popNama');
-const popUnit=document.getElementById('popUnit');
-const popPesan=document.getElementById('popPesan');
-const idleWm=document.getElementById('idleWatermark');
+const riwayatScan=[];
+const MAX_RIWAYAT=5;
+let lastScan=null;
 
-const scanHistory={};
-const COOLDOWN=10*60*1000;
-let isLock=false,audioAktif=null;
-
-// ── RIWAYAT 5 SCAN TERAKHIR ──────────────────────────────────
-const riwayatScan = []; // array of {nama, foto, jam, unit, status}
-const MAX_RIWAYAT = 5;
-
-function namaEllipsis(nama, max=22){
+function namaEllipsis(nama,max=22){
     if(!nama) return '–';
-    // Ambil nama depan saja jika terlalu panjang
-    const parts = nama.split(',')[0].trim(); // buang gelar
-    return parts.length > max ? parts.substring(0, max) + '…' : parts;
+    const parts=nama.split(',')[0].trim();
+    return parts.length>max ? parts.substring(0,max)+'…' : parts;
 }
 
 function renderRiwayat(){
-    const list = document.getElementById('riwayatList');
-    if(riwayatScan.length === 0){
-        list.innerHTML = '<span class="riwayat-empty">Belum ada scan hari ini…</span>';
+    const list=document.getElementById('riwayatList');
+    if(riwayatScan.length===0){
+        list.innerHTML='<span class="riwayat-empty">Belum ada scan hari ini…</span>';
         return;
     }
-    list.innerHTML = riwayatScan.map((r, i) => `
+    list.innerHTML=riwayatScan.map((r,i)=>`
         <div class="riwayat-item${i===0?' latest':''}">
             <img class="riwayat-avatar" src="${r.foto}" alt="${r.nama}"
                  onerror="this.src='${fotoDefault}'">
@@ -573,165 +552,160 @@ function renderRiwayat(){
     `).join('');
 }
 
-function tambahRiwayat(nama, foto, unit, jam){
-    // Masukkan ke depan array, max 5
-    riwayatScan.unshift({nama, foto, unit, jam});
-    if(riwayatScan.length > MAX_RIWAYAT) riwayatScan.pop();
+function tambahRiwayat(nama,foto,unit,jam){
+    riwayatScan.unshift({nama,foto,unit,jam});
+    if(riwayatScan.length>MAX_RIWAYAT) riwayatScan.pop();
     renderRiwayat();
 }
 
-// ── LAST SCAN — tetap tampil di right panel ───────────────────
-let lastScan = null; // {nama, foto, unit, jam, pesanChipHTML, pesanBg, pesanFg}
+// ============================================================
+// UI HELPERS
+// ============================================================
+const input  = document.getElementById('qrInput');
+const badge  = document.getElementById('statusPesan');
+const popFoto  = document.getElementById('popFoto');
+const popNama  = document.getElementById('popNama');
+const popUnit  = document.getElementById('popUnit');
+const popPesan = document.getElementById('popPesan');
+const idleWm   = document.getElementById('idleWatermark');
 
-function simpanLastScan(obj){ lastScan = obj; }
+let isLock=false;
+let audioAktif=null;
+const scanHistory={};
+const COOLDOWN=10*60*1000;
 
-function tampilLastScan(){
-    if(!lastScan) return;
-    // Kembalikan foto & nama orang terakhir scan
-    popFoto.src = lastScan.foto;
-    popNama.textContent = lastScan.nama;
-    tampilUnit(lastScan.unit);
-    popPesan.innerHTML = lastScan.pesanChipHTML;
-    popPesan.style.background = lastScan.pesanBg;
-    popPesan.style.color = lastScan.pesanFg;
-    // Tampilkan info "Terakhir Scan"
-    document.getElementById('lastScanNama').textContent = namaEllipsis(lastScan.nama, 30);
-    document.getElementById('lastScanJam').textContent  = lastScan.jam;
-    document.getElementById('lastScanInfo').classList.add('show');
-    idleWm.style.display = 'none';
+function putarRekaman(f){
+    if(audioAktif){audioAktif.pause();audioAktif.currentTime=0;}
+    audioAktif=new Audio(f);
+    audioAktif.play().catch(()=>{});
 }
 
-// Buffer scanner — menampung karakter masuk, proses setelah jeda 120ms
-// atau langsung saat Enter diterima
-let scanBuffer='';
-let scanTimer=null;
-const SCAN_TIMEOUT=120; // ms — sesuaikan jika scanner lambat (coba 150-200)
+function tampilBadge(ikon,teks,bg,fg){
+    badge.innerHTML=`<span style="font-size:20px">${ikon}</span><span>${teks}</span>`;
+    badge.style.background=bg;
+    badge.style.color=fg;
+    badge.classList.add('visible');
+}
 
-function putarRekaman(f){if(audioAktif){audioAktif.pause();audioAktif.currentTime=0;}audioAktif=new Audio(f);audioAktif.play().catch(()=>{});}
-function tampilBadge(ikon,teks,bg,fg){badge.innerHTML=`<span style="font-size:20px">${ikon}</span><span>${teks}</span>`;badge.style.background=bg;badge.style.color=fg;badge.classList.add('visible');}
-function tampilUnit(j){popUnit.textContent=j||'–';popUnit.className='unit-profil';const cls={SMPIT:'smpit',SMAIT:'smait',Yayasan:'yayasan'};popUnit.classList.add(cls[j]||'unknown');}
+function tampilUnit(j){
+    popUnit.textContent=j||'–';
+    popUnit.className='unit-profil';
+    const cls={SMPIT:'smpit',SMAIT:'smait',Yayasan:'yayasan'};
+    popUnit.classList.add(cls[j]||'unknown');
+}
 
 function resetUI(){
     badge.classList.remove('visible');
-    // Jika ada data scan terakhir → tampilkan, bukan idle default
     if(lastScan){
-        popFoto.src  = lastScan.foto;
-        popNama.textContent = lastScan.nama;
+        popFoto.src=lastScan.foto;
+        popNama.textContent=lastScan.nama;
         tampilUnit(lastScan.unit);
-        popPesan.innerHTML = lastScan.pesanChipHTML;
-        popPesan.style.background = lastScan.pesanBg;
-        popPesan.style.color = lastScan.pesanFg;
-        document.getElementById('lastScanNama').textContent = namaEllipsis(lastScan.nama, 30);
-        document.getElementById('lastScanJam').textContent  = lastScan.jam;
+        popPesan.innerHTML=lastScan.pesanChipHTML;
+        popPesan.style.background=lastScan.pesanBg;
+        popPesan.style.color=lastScan.pesanFg;
+        document.getElementById('lastScanNama').textContent=namaEllipsis(lastScan.nama,30);
+        document.getElementById('lastScanJam').textContent=lastScan.jam;
         document.getElementById('lastScanInfo').classList.add('show');
-        idleWm.style.display = 'none';
+        idleWm.style.display='none';
     } else {
-        popFoto.src = fotoDefault;
-        popNama.textContent = 'Siap Menerima Scan';
+        popFoto.src=fotoDefault;
+        popNama.textContent='Siap Menerima Scan';
         tampilUnit('–');
-        popPesan.innerHTML = '<span>Menunggu…</span>';
-        popPesan.style.background = 'var(--gray-100)';
-        popPesan.style.color = 'var(--gray-500)';
+        popPesan.innerHTML='<span>Menunggu…</span>';
+        popPesan.style.background='var(--gray-100)';
+        popPesan.style.color='var(--gray-500)';
         document.getElementById('lastScanInfo').classList.remove('show');
-        idleWm.style.display = 'block';
+        idleWm.style.display='block';
     }
     isLock=false;
-    scanBuffer='';
     input.value='';
     input.readOnly=false;
     input.placeholder='Menunggu scan ID Card…';
-    setTimeout(()=>input.focus(),50);
+    input.focus();
 }
 
 // ============================================================
-// SCANNER — Metode Form + Enter (sama seperti Mei2026 yang berhasil)
-// Tidak pakai buffer timeout, tidak pakai capture:true.
-// Scanner USB/BT yang mengirim Enter di akhir → keydown Enter = proses.
-// Data dikirim via Google Forms POST ke hidden_iframe → tidak reload.
+// FOCUS LOCK — persis dari Mei2026 yang berhasil
 // ============================================================
-
-const form    = document.getElementById('presensiForm');
-const fieldQR = document.getElementById('fieldQR');
-
-// ── FOCUS LOCK sederhana — sama persis dengan Mei2026 ──────
 document.addEventListener('click', ()=>{ if(!isLock) input.focus(); });
 input.addEventListener('blur', ()=>{ if(!isLock) setTimeout(()=>input.focus(), 10); });
 
-// ── KEYDOWN: tunggu Enter dari scanner ─────────────────────
-input.addEventListener('keydown', function(e) {
+// ============================================================
+// SCANNER — persis dari Mei2026: tunggu Enter, kirim via Form
+// ============================================================
+const form    = document.getElementById('presensiForm');
+const fieldQR = document.getElementById('fieldQR');
+
+input.addEventListener('keydown', function(e){
     if(e.key !== 'Enter') return;
     e.preventDefault();
 
-    if(isLock){ input.value = ''; return; }
+    // Tolak jika sedang lock
+    if(isLock){ input.value=''; return; }
 
     const id = input.value.trim();
     if(!id) return;
 
-    isLock = true;
-    input.readOnly    = true;
-    input.placeholder = 'MOHON TUNGGU…';
-    idleWm.style.display = 'none';
+    // LOCK — cegah scan apapun masuk
+    isLock=true;
+    input.readOnly=true;
+    input.placeholder='MOHON TUNGGU…';
+    idleWm.style.display='none';
 
-    const pg = dataPegawai[id];
-    popNama.textContent = pg ? pg.nama : id;
-    popFoto.src         = pg ? pg.foto : fotoDefault;
+    const pg=dataPegawai[id];
+    popNama.textContent=pg ? pg.nama : id;
+    popFoto.src=pg ? pg.foto : fotoDefault;
     tampilUnit(pg ? pg.jabatan : '⚠️ Tak Dikenal');
 
-    const nowMs = Date.now();
-    const now   = new Date();
+    const nowMs=Date.now();
+    const now=new Date();
 
-    if(scanHistory[id] && (nowMs - scanHistory[id] < COOLDOWN)){
-        // ── Double scan ──
+    if(scanHistory[id] && (nowMs-scanHistory[id]<COOLDOWN)){
+        // ── DOUBLE SCAN — tampilkan peringatan, TIDAK kirim ke form
         putarRekaman('sudah_scan.wav');
         tampilBadge('⚠️','Anda sudah melakukan presensi','var(--orange-light)','var(--orange)');
-        popPesan.innerHTML = '<span>⚠️ SUDAH PRESENSI</span>';
-        popPesan.style.background = 'var(--orange-light)';
-        popPesan.style.color      = 'var(--orange)';
+        popPesan.innerHTML='<span>⚠️ SUDAH PRESENSI</span>';
+        popPesan.style.background='var(--orange-light)';
+        popPesan.style.color='var(--orange)';
 
     } else {
-        // ── Scan baru ──
-        const st = cekStatus(now);
-        const em = statusEmoji(st);
+        // ── SCAN VALID
+        const st=cekStatus(now);
+        const em=statusEmoji(st);
 
-        if(st.terlambat)          putarRekaman('terlambat.wav');
+        if(st.terlambat)           putarRekaman('terlambat.wav');
         else if(st.sesi==='Pulang') putarRekaman('pulang.wav');
         else                        putarRekaman('datang_berhasil.wav');
 
-        tampilBadge(em.ikon, em.teks, em.bg, em.fg);
-        popPesan.innerHTML        = `<span>${statusLabel(st, st.sabtu)}</span>`;
-        popPesan.style.background = em.bg;
-        popPesan.style.color      = em.fg;
+        tampilBadge(em.ikon,em.teks,em.bg,em.fg);
+        popPesan.innerHTML=`<span>${statusLabel(st)}</span>`;
+        popPesan.style.background=em.bg;
+        popPesan.style.color=em.fg;
 
-        const jamScan = `${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
-        const tgl     = `${f2(now.getDate())}/${f2(now.getMonth()+1)}/${now.getFullYear()}`;
+        const jamScan=`${f2(now.getHours())}:${f2(now.getMinutes())}:${f2(now.getSeconds())}`;
 
-        let statusTeks = '🟢 Tepat Waktu';
-        if(st.sabtu && !st.terlambat) statusTeks = '🟢 Sabtu Ontime';
-        else if(st.terlambat)          statusTeks = '🔴 Terlambat';
-        else if(st.sesi==='Pulang' && st.pulangCepat) statusTeks = '🟡 Pulang Cepat';
-        else if(st.sesi==='Pulang')    statusTeks = '🟢 Tepat Waktu';
-
-        // ── Simpan riwayat & last scan ──
-        const unitLabel = pg ? pg.jabatan : '?';
-        tambahRiwayat(pg ? pg.nama : id, pg ? pg.foto : fotoDefault, unitLabel, jamScan);
-        simpanLastScan({
-            nama: pg ? pg.nama : id,
-            foto: pg ? pg.foto : fotoDefault,
+        // Simpan riwayat & last scan
+        const unitLabel=pg ? pg.jabatan : '?';
+        tambahRiwayat(pg?pg.nama:id, pg?pg.foto:fotoDefault, unitLabel, jamScan);
+        lastScan={
+            nama: pg?pg.nama:id,
+            foto: pg?pg.foto:fotoDefault,
             unit: unitLabel,
             jam:  `Terakhir: ${jamScan}`,
-            pesanChipHTML: `<span>${statusLabel(st, st.sabtu)}</span>`,
+            pesanChipHTML: `<span>${statusLabel(st)}</span>`,
             pesanBg: em.bg,
             pesanFg: em.fg,
-        });
+        };
 
-        // ── Kirim ke Google Forms via hidden iframe (1 field: QR Code) ──
+        // ── KIRIM KE GOOGLE FORMS — 1 field saja: QR Code
         fieldQR.value = id;
         form.submit();
 
-        scanHistory[id] = nowMs;
+        // Catat waktu scan untuk cooldown
+        scanHistory[id]=nowMs;
     }
 
-    input.value = '';
+    input.value='';
     setTimeout(resetUI, 4000);
 });
 </script>
