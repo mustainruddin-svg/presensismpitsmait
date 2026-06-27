@@ -155,6 +155,69 @@
         .riwayat-meta{font-size:10px;color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;}
         .riwayat-empty{font-size:12px;color:rgba(255,255,255,.3);font-style:italic;}
 
+        /* ── MOTIVASI BAR ── */
+        .motivasi-bar{width:100%;max-width:1120px;margin-top:14px;position:relative;z-index:1;}
+        .motivasi-inner{
+            background:linear-gradient(135deg,rgba(212,160,23,.18) 0%,rgba(255,255,255,.06) 60%,rgba(14,165,233,.12) 100%);
+            border:1px solid rgba(212,160,23,.25);
+            border-radius:16px;
+            padding:18px 28px;
+            display:flex;
+            align-items:center;
+            gap:20px;
+            min-height:72px;
+            overflow:hidden;
+            position:relative;
+        }
+        .motivasi-inner::before{
+            content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+            background:linear-gradient(to bottom,var(--gold),var(--gold-bright));
+            border-radius:4px 0 0 4px;
+        }
+        .motivasi-icon{
+            font-size:28px;flex-shrink:0;
+            animation:iconPulse 3s ease-in-out infinite;
+        }
+        @keyframes iconPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+        .motivasi-content{flex:1;overflow:hidden;}
+        .motivasi-label{
+            font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+            color:rgba(212,160,23,.7);margin-bottom:5px;
+        }
+        .motivasi-teks{
+            font-size:14px;font-weight:600;color:rgba(255,255,255,.92);
+            line-height:1.55;
+            opacity:0;
+            transform:translateY(8px);
+            transition:opacity .6s ease, transform .6s ease;
+        }
+        .motivasi-teks.tampil{opacity:1;transform:translateY(0);}
+        .motivasi-teks.keluar{opacity:0;transform:translateY(-8px);}
+        .motivasi-sumber{
+            font-size:10px;font-weight:600;color:rgba(212,160,23,.75);
+            margin-top:4px;font-style:italic;
+            opacity:0;transition:opacity .6s ease .2s;
+        }
+        .motivasi-sumber.tampil{opacity:1;}
+        .motivasi-counter{
+            flex-shrink:0;text-align:right;
+        }
+        .motivasi-dot-wrap{display:flex;gap:5px;justify-content:flex-end;margin-bottom:6px;}
+        .motivasi-dot{
+            width:5px;height:5px;border-radius:50%;
+            background:rgba(255,255,255,.2);
+            transition:background .3s,transform .3s;
+        }
+        .motivasi-dot.aktif{background:var(--gold-bright);transform:scale(1.3);}
+        .motivasi-progress{
+            width:56px;height:3px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;
+        }
+        .motivasi-progress-fill{
+            height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));
+            border-radius:3px;width:0%;
+            transition:width linear;
+        }
+
         /* ── RESPONSIVE ── */
         @media(max-width:768px){
             .wrapper{flex-direction:column;}
@@ -281,6 +344,28 @@
         <div class="riwayat-label">5 Terakhir</div>
         <div class="riwayat-list" id="riwayatList">
             <span class="riwayat-empty">Belum ada scan hari ini…</span>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MOTIVASI BAR
+     Letakkan di sini, tepat setelah riwayat-bar.
+     Isi kutipan dikelola di array MOTIVASI_LIST di bagian JS.
+     ══════════════════════════════════════════════════════════ -->
+<div class="motivasi-bar">
+    <div class="motivasi-inner">
+        <div class="motivasi-icon" id="motivasiIkon">🌟</div>
+        <div class="motivasi-content">
+            <div class="motivasi-label">Motivasi Hari Ini</div>
+            <div class="motivasi-teks" id="motivasiTeks">Memuat…</div>
+            <div class="motivasi-sumber" id="motivasiSumber"></div>
+        </div>
+        <div class="motivasi-counter">
+            <div class="motivasi-dot-wrap" id="motivasiDots"></div>
+            <div class="motivasi-progress">
+                <div class="motivasi-progress-fill" id="motivasiBar"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -886,6 +971,107 @@ function prosesScan(idRaw) {
 
     setTimeout(resetUI, 4000);
 }
+
+// ============================================================
+// MOTIVASI — Rotasi otomatis setiap 12 detik
+// ============================================================
+// ┌─────────────────────────────────────────────────────────┐
+// │  EDIT KUTIPAN DI SINI — tambah/hapus objek di array    │
+// │  Format setiap item:                                    │
+// │    { ikon:"🌟", teks:"isi kutipan", sumber:"– Nama" }  │
+// └─────────────────────────────────────────────────────────┘
+const MOTIVASI_LIST = [
+    { ikon:"🌟", teks:"Sebaik-baik manusia adalah yang paling bermanfaat bagi manusia lain.", sumber:"– HR. Ahmad, Thabrani" },
+    { ikon:"📚", teks:"Menuntut ilmu adalah kewajiban bagi setiap muslim.", sumber:"– HR. Ibnu Majah" },
+    { ikon:"🤲", teks:"Barang siapa berjalan mencari ilmu, Allah akan mudahkan baginya jalan menuju surga.", sumber:"– HR. Muslim" },
+    { ikon:"💡", teks:"Ilmu tanpa amal seperti pohon tanpa buah. Jadikan ilmu sebagai pelita dalam setiap langkah.", sumber:"– Imam Al-Ghazali" },
+    { ikon:"🏆", teks:"Kemenangan terbesar adalah kemenangan atas diri sendiri. Mulailah dari disiplin kecil setiap hari.", sumber:"– Pepatah Bijak" },
+    { ikon:"🌱", teks:"Didiklah anakmu sesuai zamannya, karena mereka akan hidup di zaman yang bukan zamanmu.", sumber:"– Ali bin Abi Thalib r.a." },
+    { ikon:"✨", teks:"Guru yang baik tidak hanya mengajarkan ilmu, tetapi juga menyalakan semangat dalam jiwa muridnya.", sumber:"– William Arthur Ward" },
+    { ikon:"🕌", teks:"Sesungguhnya bersama kesulitan ada kemudahan. Maka apabila engkau telah selesai, tetaplah bekerja keras.", sumber:"– QS. Al-Insyirah: 6-7" },
+    { ikon:"🌙", teks:"Jangan pernah meremehkan kebaikan sekecil apapun, meski hanya dengan wajah yang berseri kepada saudaramu.", sumber:"– HR. Muslim" },
+    { ikon:"💪", teks:"Mukmin yang kuat lebih baik dan lebih dicintai Allah daripada mukmin yang lemah.", sumber:"– HR. Muslim" },
+    { ikon:"🎯", teks:"Niatkan setiap langkahmu karena Allah, maka setiap pekerjaan menjadi ibadah yang bernilai.", sumber:"– Ustadz Nouman Ali Khan" },
+    { ikon:"🌊", teks:"Jadilah seperti air — menemukan jalan di mana pun ia berada, rendah hati namun tak terbendung.", sumber:"– Pepatah Bijak" },
+];
+
+const MOTIVASI_DURASI_MS = 12000; // ganti angka ini untuk ubah kecepatan rotasi (milidetik)
+
+let motivasiIndex   = 0;
+let motivasiTimer   = null;
+let motivasiProgres = null;
+
+function buatDots() {
+    const wrap = document.getElementById('motivasiDots');
+    wrap.innerHTML = '';
+    MOTIVASI_LIST.forEach((_, i) => {
+        const d = document.createElement('div');
+        d.className = 'motivasi-dot' + (i === 0 ? ' aktif' : '');
+        wrap.appendChild(d);
+    });
+}
+
+function updateDots(idx) {
+    document.querySelectorAll('.motivasi-dot').forEach((d, i) => {
+        d.classList.toggle('aktif', i === idx);
+    });
+}
+
+function animasiKeluar(cb) {
+    const t = document.getElementById('motivasiTeks');
+    const s = document.getElementById('motivasiSumber');
+    t.classList.remove('tampil'); t.classList.add('keluar');
+    s.classList.remove('tampil');
+    setTimeout(cb, 400);
+}
+
+function tampilkanMotivasi(idx) {
+    const item = MOTIVASI_LIST[idx];
+    const ikon = document.getElementById('motivasiIkon');
+    const t    = document.getElementById('motivasiTeks');
+    const s    = document.getElementById('motivasiSumber');
+    const bar  = document.getElementById('motivasiBar');
+
+    // Ganti konten
+    ikon.textContent = item.ikon;
+    t.textContent    = item.teks;
+    s.textContent    = item.sumber || '';
+    t.classList.remove('keluar');
+
+    // Animasi masuk
+    requestAnimationFrame(() => {
+        t.classList.add('tampil');
+        s.classList.add('tampil');
+    });
+
+    // Update dots
+    updateDots(idx);
+
+    // Reset + animasikan progress bar
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            bar.style.transition = `width ${MOTIVASI_DURASI_MS}ms linear`;
+            bar.style.width = '100%';
+        });
+    });
+}
+
+function mulaiRotasiMotivasi() {
+    buatDots();
+    tampilkanMotivasi(motivasiIndex);
+
+    motivasiTimer = setInterval(() => {
+        animasiKeluar(() => {
+            motivasiIndex = (motivasiIndex + 1) % MOTIVASI_LIST.length;
+            tampilkanMotivasi(motivasiIndex);
+        });
+    }, MOTIVASI_DURASI_MS);
+}
+
+// Mulai saat halaman siap
+mulaiRotasiMotivasi();
 </script>
 </body>
 </html>
