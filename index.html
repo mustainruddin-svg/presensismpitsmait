@@ -160,8 +160,8 @@
     <p id="loadingText">Memuat konfigurasi jam dari server…</p>
 </div>
 
-<div id="kioskBanner">
-    ⚠️ KLIK LAYAR untuk masuk mode Fullscreen — agar address bar hilang dan scanner tidak inject ke browser
+<div id="kioskBanner" class="show">
+    ⚠️ KLIK LAYAR untuk masuk mode Fullscreen — agar address bar hilang dan scanner tidak lari
 </div>
 <div class="config-bar">
     <div class="config-pill load" id="configPill">
@@ -198,16 +198,6 @@
                 <div class="jam-chip"><div class="jam-chip-label">CS Pulang</div><div class="jam-chip-value" id="dispCsPulang">--:--</div></div>
                 <div class="jam-chip"><div class="jam-chip-label">CS Sabtu</div><div class="jam-chip-value" id="dispCsSabtu">--:--</div></div>
             </div>
-
-            <!-- Google Forms — 1 field saja: Scan QR Code Anda -->
-            <form id="presensiForm"
-                  action="https://docs.google.com/forms/d/e/1FAIpQLSdgIBku3Y5cNNWSGKzSZByEIo31fZT4XVpw1ONS15sm7kXoxA/formResponse"
-                  method="POST"
-                  target="hidden_iframe">
-                <input type="hidden" name="entry.87698692" id="fieldQR">
-            </form>
-            <!-- iframe tersembunyi — submit tanpa reload halaman -->
-            <iframe name="hidden_iframe" style="display:none;"></iframe>
 
             <div class="input-wrapper">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -514,13 +504,6 @@ function statusEmoji(st){
     return {ikon:'✅',teks:'Datang – Berhasil dicatat',bg:'var(--green-light)',fg:'var(--green)'};
 }
 
-function jenisHariStr(now){
-    const d=now.getDay();
-    if(d===0) return 'Minggu';
-    if(d===6) return 'Sabtu';
-    return 'Hari Kerja';
-}
-
 // ============================================================
 // RIWAYAT 5 SCAN TERAKHIR
 // ============================================================
@@ -625,17 +608,27 @@ function resetUI(){
 }
 
 // ============================================================
-// FOCUS LOCK — persis dari Mei2026 yang berhasil
+// MENGUNCI LAYAR PENUH (FULLSCREEN) & FOCUS LOCK
 // ============================================================
-document.addEventListener('click', ()=>{ if(!isLock) input.focus(); });
+document.body.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch((err) => {
+            console.log("Gagal masuk fullscreen:", err);
+        });
+    }
+    // Sembunyikan banner Kiosk jika ada
+    const kioskBanner = document.getElementById('kioskBanner');
+    if (kioskBanner) kioskBanner.classList.remove('show');
+    
+    // Kembalikan fokus ke input QR
+    if (!isLock) input.focus();
+});
 input.addEventListener('blur', ()=>{ if(!isLock) setTimeout(()=>input.focus(), 10); });
 
-// ============================================================
-// SCANNER — persis dari Mei2026: tunggu Enter, kirim via Form
-// ============================================================
-const form    = document.getElementById('presensiForm');
-const fieldQR = document.getElementById('fieldQR');
 
+// ============================================================
+// SCANNER 
+// ============================================================
 input.addEventListener('keydown', function(e){
     if(e.key !== 'Enter') return;
     e.preventDefault();
@@ -697,9 +690,20 @@ input.addEventListener('keydown', function(e){
             pesanFg: em.fg,
         };
 
-        // ── KIRIM KE GOOGLE FORMS — 1 field saja: QR Code
-        fieldQR.value = id;
-        form.submit();
+        // ── KIRIM KE GOOGLE FORMS MENGGUNAKAN FETCH (NO-CORS)
+        const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdgIBku3Y5cNNWSGKzSZByEIo31fZT4XVpw1ONS15sm7kXoxA/formResponse";
+        const formData = new FormData();
+        formData.append("entry.87698692", id);
+
+        fetch(formUrl, {
+            method: "POST",
+            mode: "no-cors",
+            body: formData
+        }).then(() => {
+            console.log("Presensi berhasil dikirim ke database.");
+        }).catch((error) => {
+            console.error("Gagal mengirim presensi:", error);
+        });
 
         // Catat waktu scan untuk cooldown
         scanHistory[id]=nowMs;
