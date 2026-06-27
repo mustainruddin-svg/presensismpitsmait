@@ -117,6 +117,29 @@
         .idle-watermark p{font-size:12px;font-weight:600;color:var(--sky-dark);margin-top:8px;letter-spacing:.5px;text-transform:uppercase;}
 
         @media(max-width:768px){.wrapper{flex-direction:column;}.header{flex-direction:column;text-align:center;}.header-divider{width:60px;height:2px;}.clock-main{font-size:32px;}.jam-grid{grid-template-columns:repeat(2,1fr);}}
+
+        /* ── RIWAYAT 5 SCAN TERAKHIR ── */
+        .riwayat-bar{width:100%;max-width:1120px;margin-top:16px;position:relative;z-index:1;}
+        .riwayat-inner{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px 20px;display:flex;align-items:center;gap:12px;}
+        .riwayat-label{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.45);white-space:nowrap;flex-shrink:0;}
+        .riwayat-list{display:flex;gap:10px;flex:1;flex-wrap:wrap;}
+        .riwayat-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:30px;padding:5px 12px 5px 6px;transition:all .3s cubic-bezier(.34,1.56,.64,1);animation:slideIn .35s cubic-bezier(.34,1.56,.64,1);}
+        @keyframes slideIn{from{opacity:0;transform:translateX(-12px) scale(.9);}to{opacity:1;transform:translateX(0) scale(1);}}
+        .riwayat-item.latest{background:rgba(212,160,23,.2);border-color:rgba(212,160,23,.4);}
+        .riwayat-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(255,255,255,.25);flex-shrink:0;}
+        .riwayat-item.latest .riwayat-avatar{border-color:rgba(212,160,23,.7);}
+        .riwayat-info{display:flex;flex-direction:column;line-height:1.2;}
+        .riwayat-nama{font-size:12px;font-weight:700;color:#fff;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .riwayat-item.latest .riwayat-nama{color:#fcd34d;}
+        .riwayat-meta{font-size:10px;color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;}
+        .riwayat-empty{font-size:12px;color:rgba(255,255,255,.3);font-style:italic;}
+
+        /* ── RIGHT PANEL — nama & foto tetap tampil setelah scan ── */
+        .last-scan-info{margin-top:12px;padding-top:12px;border-top:1px dashed rgba(0,0,0,.08);width:100%;text-align:center;display:none;}
+        .last-scan-info.show{display:block;}
+        .last-scan-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500);margin-bottom:4px;}
+        .last-scan-nama{font-size:13px;font-weight:700;color:var(--gray-700);line-height:1.3;}
+        .last-scan-jam{font-size:11px;font-family:'DM Mono',monospace;color:var(--gray-500);margin-top:2px;}
     </style>
 </head>
 <body>
@@ -201,9 +224,24 @@
         <div class="nama-profil" id="popNama">Siap Menerima Scan</div>
         <div class="unit-profil unknown" id="popUnit">–</div>
         <div class="pesan-chip" id="popPesan"><span>Menunggu…</span></div>
+        <div class="last-scan-info" id="lastScanInfo">
+            <div class="last-scan-label">⏱ Terakhir Scan</div>
+            <div class="last-scan-nama" id="lastScanNama">–</div>
+            <div class="last-scan-jam" id="lastScanJam">–</div>
+        </div>
         <div class="idle-watermark" id="idleWatermark">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <p>Sistem Aktif &amp; Aman</p>
+        </div>
+    </div>
+</div>
+
+<!-- ── RIWAYAT 5 SCAN TERAKHIR ── -->
+<div class="riwayat-bar">
+    <div class="riwayat-inner">
+        <div class="riwayat-label">5 Terakhir</div>
+        <div class="riwayat-list" id="riwayatList">
+            <span class="riwayat-empty">Belum ada scan hari ini…</span>
         </div>
     </div>
 </div>
@@ -475,6 +513,63 @@ const scanHistory={};
 const COOLDOWN=10*60*1000;
 let isLock=false,audioAktif=null;
 
+// ── RIWAYAT 5 SCAN TERAKHIR ──────────────────────────────────
+const riwayatScan = []; // array of {nama, foto, jam, unit, status}
+const MAX_RIWAYAT = 5;
+
+function namaEllipsis(nama, max=22){
+    if(!nama) return '–';
+    // Ambil nama depan saja jika terlalu panjang
+    const parts = nama.split(',')[0].trim(); // buang gelar
+    return parts.length > max ? parts.substring(0, max) + '…' : parts;
+}
+
+function renderRiwayat(){
+    const list = document.getElementById('riwayatList');
+    if(riwayatScan.length === 0){
+        list.innerHTML = '<span class="riwayat-empty">Belum ada scan hari ini…</span>';
+        return;
+    }
+    list.innerHTML = riwayatScan.map((r, i) => `
+        <div class="riwayat-item${i===0?' latest':''}">
+            <img class="riwayat-avatar" src="${r.foto}" alt="${r.nama}"
+                 onerror="this.src='${fotoDefault}'">
+            <div class="riwayat-info">
+                <div class="riwayat-nama">${namaEllipsis(r.nama)}</div>
+                <div class="riwayat-meta">${r.jam} · ${r.unit}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function tambahRiwayat(nama, foto, unit, jam){
+    // Masukkan ke depan array, max 5
+    riwayatScan.unshift({nama, foto, unit, jam});
+    if(riwayatScan.length > MAX_RIWAYAT) riwayatScan.pop();
+    renderRiwayat();
+}
+
+// ── LAST SCAN — tetap tampil di right panel ───────────────────
+let lastScan = null; // {nama, foto, unit, jam, pesanChipHTML, pesanBg, pesanFg}
+
+function simpanLastScan(obj){ lastScan = obj; }
+
+function tampilLastScan(){
+    if(!lastScan) return;
+    // Kembalikan foto & nama orang terakhir scan
+    popFoto.src = lastScan.foto;
+    popNama.textContent = lastScan.nama;
+    tampilUnit(lastScan.unit);
+    popPesan.innerHTML = lastScan.pesanChipHTML;
+    popPesan.style.background = lastScan.pesanBg;
+    popPesan.style.color = lastScan.pesanFg;
+    // Tampilkan info "Terakhir Scan"
+    document.getElementById('lastScanNama').textContent = namaEllipsis(lastScan.nama, 30);
+    document.getElementById('lastScanJam').textContent  = lastScan.jam;
+    document.getElementById('lastScanInfo').classList.add('show');
+    idleWm.style.display = 'none';
+}
+
 // Buffer scanner — menampung karakter masuk, proses setelah jeda 120ms
 // atau langsung saat Enter diterima
 let scanBuffer='';
@@ -487,19 +582,33 @@ function tampilUnit(j){popUnit.textContent=j||'–';popUnit.className='unit-prof
 
 function resetUI(){
     badge.classList.remove('visible');
-    popFoto.src=fotoDefault;
-    popNama.textContent='Siap Menerima Scan';
-    tampilUnit('–');
-    popPesan.innerHTML='<span>Menunggu…</span>';
-    popPesan.style.background='var(--gray-100)';
-    popPesan.style.color='var(--gray-500)';
-    idleWm.style.display='block';
+    // Jika ada data scan terakhir → tampilkan, bukan idle default
+    if(lastScan){
+        popFoto.src  = lastScan.foto;
+        popNama.textContent = lastScan.nama;
+        tampilUnit(lastScan.unit);
+        popPesan.innerHTML = lastScan.pesanChipHTML;
+        popPesan.style.background = lastScan.pesanBg;
+        popPesan.style.color = lastScan.pesanFg;
+        document.getElementById('lastScanNama').textContent = namaEllipsis(lastScan.nama, 30);
+        document.getElementById('lastScanJam').textContent  = lastScan.jam;
+        document.getElementById('lastScanInfo').classList.add('show');
+        idleWm.style.display = 'none';
+    } else {
+        popFoto.src = fotoDefault;
+        popNama.textContent = 'Siap Menerima Scan';
+        tampilUnit('–');
+        popPesan.innerHTML = '<span>Menunggu…</span>';
+        popPesan.style.background = 'var(--gray-100)';
+        popPesan.style.color = 'var(--gray-500)';
+        document.getElementById('lastScanInfo').classList.remove('show');
+        idleWm.style.display = 'block';
+    }
     isLock=false;
     scanBuffer='';
     input.value='';
     input.readOnly=false;
     input.placeholder='Menunggu scan ID Card…';
-    // Kembalikan fokus dengan sedikit delay
     setTimeout(()=>input.focus(),50);
 }
 
@@ -528,6 +637,22 @@ if(passOk){
         if(!document.hidden) setTimeout(kunciKursor, 200);
     });
     window.addEventListener('focus', ()=>setTimeout(kunciKursor, 100));
+
+    // ── FIX BUG: focus kabur ke address bar ──────────────────
+    // Scanner kadang kirim karakter pertama sebelum halaman focused
+    // Intercept mousedown agar klik apapun di halaman tidak melepas focus dari input
+    document.addEventListener('mousedown', (e)=>{
+        if(e.target !== input && !isLock){
+            e.preventDefault(); // cegah klik pindahkan focus
+        }
+    });
+
+    // Periodic check setiap 300ms — jika focus kabur, kembalikan
+    setInterval(()=>{
+        if(!isLock && document.activeElement !== input && !document.hidden){
+            input.focus();
+        }
+    }, 300);
 }
 
 // ── PROSES HASIL SCAN ────────────────────────────────────────
@@ -576,6 +701,19 @@ function prosesHasilScan(id){
         else if(st.terlambat) statusTeks='🔴 Terlambat';
         else if(st.sesi==='Pulang'&&st.pulangCepat) statusTeks='🟡 Pulang Cepat';
         else if(st.sesi==='Pulang') statusTeks='🟢 Tepat Waktu';
+
+        // ── Simpan ke riwayat & last scan ──
+        const unitLabel = pg ? pg.jabatan : '?';
+        tambahRiwayat(pg?pg.nama:id, pg?pg.foto:fotoDefault, unitLabel, jamScan);
+        simpanLastScan({
+            nama: pg?pg.nama:id,
+            foto: pg?pg.foto:fotoDefault,
+            unit: unitLabel,
+            jam:  `Terakhir: ${jamScan}`,
+            pesanChipHTML: `<span>${statusLabel(st,st.sabtu)}</span>`,
+            pesanBg: em.bg,
+            pesanFg: em.fg,
+        });
 
         kirimKeGAS({
             qrCode:   id,
