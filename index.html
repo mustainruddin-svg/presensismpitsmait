@@ -602,7 +602,6 @@ function resetUI(){
     }
     isLock=false;
     input.value='';
-    input.readOnly=false;
     input.placeholder='Menunggu scan ID Card…';
     input.focus();
 }
@@ -623,7 +622,10 @@ document.body.addEventListener('click', () => {
     // Kembalikan fokus ke input QR
     if (!isLock) input.focus();
 });
-input.addEventListener('blur', ()=>{ if(!isLock) setTimeout(()=>input.focus(), 10); });
+// Paksa kursor kembali ke kotak input dalam kondisi apapun (meskipun sedang loading)
+input.addEventListener('blur', () => {
+    setTimeout(() => input.focus(), 10);
+});
 
 
 // ============================================================
@@ -659,9 +661,10 @@ function prosesScan() {
     const id = input.value.trim();
     if(!id) return;
 
-    // LOCK — cegah scan lain masuk beruntun saat memproses
+// LOCK — cegah scan lain masuk beruntun saat memproses
     isLock = true;
-    input.readOnly = true;
+    // input.readOnly = true;  <-- HAPUS ATAU JADIKAN KOMENTAR BARIS INI
+    input.value = ''; // Kosongkan input agar tidak menumpuk
     input.placeholder = 'MOHON TUNGGU…';
     idleWm.style.display = 'none';
 
